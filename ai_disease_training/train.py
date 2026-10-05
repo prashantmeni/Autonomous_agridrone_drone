@@ -112,39 +112,44 @@ def augment_batches(dataset, cfg: dict, height: int, width: int):
             # zoom < 1 zooms in; sample a scale in [1-zoom, 1].
             scale = 1.0 - tf.random.uniform([shape[0]], 0.0, zoom)
 
-            # Build a real 2x3 affine matrix: R @ S, where
-            #   R = rotation by theta,  S = shear by phi.
+            # Build a real 2x3 affine matrix: rot_m @ shear_m, where
+            #   rot_m   = rotation by theta
+            #   shear_m = shear by phi
             # Angles must be converted to cos/sin; putting the raw angle in the
             # matrix would make the linear part ~identity and the "rotation"
             # a silent no-op.
+            #
+            # These are named *_m, not `rotation`/`shear`: rebinding those names
+            # to tensors would make them function-locals for all of _augment,
+            # so the range checks above would raise UnboundLocalError.
             cos_t, sin_t = tf.math.cos(theta), tf.math.sin(theta)
             tan_p = tf.math.tan(phi)
             ones = tf.ones_like(theta)
             zeros = tf.zeros_like(theta)
-            rotation = tf.stack([
+            rot_m = tf.stack([
                 tf.stack([cos_t, -sin_t, zeros], axis=-1),
                 tf.stack([sin_t, cos_t, zeros], axis=-1),
             ], axis=1)                                   # (batch, 2, 3)
-            shear = tf.stack([
+            shear_m = tf.stack([
                 tf.stack([ones, tan_p, zeros], axis=-1),
                 tf.stack([zeros, ones, zeros], axis=-1),
             ], axis=1)                                   # (batch, 2, 3)
-            # Compose R @ S (2x3 each, homogeneous row implied).
-            a = tf.stack([
-                tf.stack([rotation[:, 0, 0] * shear[:, 0, 0]
-                          + rotation[:, 0, 1] * shear[:, 1, 0],
-                          rotation[:, 0, 0] * shear[:, 0, 1]
-                          + rotation[:, 0, 1] * shear[:, 1, 1],
+            # Compose rot_m @ shear_m (2x3 each, homogeneous row implied).
+            composed = tf.stack([
+                tf.stack([rot_m[:, 0, 0] * shear_m[:, 0, 0]
+                          + rot_m[:, 0, 1] * shear_m[:, 1, 0],
+                          rot_m[:, 0, 0] * shear_m[:, 0, 1]
+                          + rot_m[:, 0, 1] * shear_m[:, 1, 1],
                           tf.zeros_like(theta)], axis=-1),
-                tf.stack([rotation[:, 1, 0] * shear[:, 0, 0]
-                          + rotation[:, 1, 1] * shear[:, 1, 0],
-                          rotation[:, 1, 0] * shear[:, 0, 1]
-                          + rotation[:, 1, 1] * shear[:, 1, 1],
+                tf.stack([rot_m[:, 1, 0] * shear_m[:, 0, 0]
+                          + rot_m[:, 1, 1] * shear_m[:, 1, 0],
+                          rot_m[:, 1, 0] * shear_m[:, 0, 1]
+                          + rot_m[:, 1, 1] * shear_m[:, 1, 1],
                           tf.zeros_like(theta)], axis=-1),
             ], axis=1)
             transforms = tf.stack([
-                tf.stack([a[:, 0, 0], a[:, 0, 1], tx], axis=-1),
-                tf.stack([a[:, 1, 0], a[:, 1, 1], ty], axis=-1),
+                tf.stack([composed[:, 0, 0], composed[:, 0, 1], tx], axis=-1),
+                tf.stack([composed[:, 1, 0], composed[:, 1, 1], ty], axis=-1),
             ], axis=1)                                   # (batch, 2, 3)
 
             x = tf.image.affine_transform(

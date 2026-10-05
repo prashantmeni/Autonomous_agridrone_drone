@@ -44,3 +44,6 @@ data/models/
 # Telemetry logs written at runtime.
 data/logs/
 !data/logs/.gitkeep
+# Same, for any module that resolves its own data dir at runtime.
+**/data/logs/
+**/data/*.db

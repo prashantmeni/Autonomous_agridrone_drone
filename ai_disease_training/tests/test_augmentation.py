@@ -108,13 +108,13 @@ def test_rotation_matrix_layout_is_batch_by_2_by_3():
         tf.stack([sin_t, cos_t, zeros], axis=-1),
     ], axis=1)
     assert tuple(m.shape) == (2, 2, 3)
-    # cos(0) == 1 off-diagonal, so a zero angle is the identity.
-    ident = tf.eye(2)[None].repeat(2, 0)
-    zero = tf.constant([0.0, 0.0])
+    # A zero angle must build the identity, so compare against tf.repeat of
+    # tf.eye. tf.repeat, not Tensor.repeat: the latter is numpy-only and does
+    # not exist on an EagerTensor.
+    ident = tf.repeat(tf.eye(2)[None], 2, axis=0)
+    zero = tf.zeros([2], dtype=tf.float32)
     built = tf.stack([
-        tf.stack([tf.math.cos(zero), -tf.math.sin(zero), zeros[:2] * 0],
-                 axis=-1),
-        tf.stack([tf.math.sin(zero), tf.math.cos(zero), zeros[:2] * 0],
-                 axis=-1),
+        tf.stack([tf.math.cos(zero), -tf.math.sin(zero), zero], axis=-1),
+        tf.stack([tf.math.sin(zero), tf.math.cos(zero), zero], axis=-1),
     ], axis=1)
     assert np.allclose(built.numpy(), ident.numpy(), atol=1e-6)
