@@ -1,0 +1,10 @@
+[Unit]
+Description=AgriDrone companion computer
+After=network.target
+[Service]
+ExecStart=/usr/bin/python3 -m drone.main --config /opt/agridrone/config/production.yaml
+WorkingDirectory=/opt/agridrone
+Restart=always
+EnvironmentFile=/opt/agridrone/.env
+[Install]
+WantedBy=multi-user.target

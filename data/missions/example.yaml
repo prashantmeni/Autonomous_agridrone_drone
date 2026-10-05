@@ -1,0 +1,9 @@
+mission:
+  name: field_survey_001
+  takeoff: {altitude_m: 20}
+  waypoints:
+    - {lat: 12.0, lon: 77.0, alt: 20}
+    - {lat: 12.001, lon: 77.001, alt: 20}
+  survey: {altitude_m: 20, overlap: 0.70, speed_mps: 5}
+  return_to_home: true
+  landing: {precision: false}

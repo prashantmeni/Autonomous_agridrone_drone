@@ -1,0 +1,53 @@
+# Crop disease AI configuration
+# Standalone module. No flight-control settings here by design.
+
+model:
+  # Place your converted ONNX model here. The reference repository does NOT
+  # ship trained weights, so this file is intentionally absent until you supply one.
+  path: models/disease_model.onnx
+  labels: models/labels.txt
+
+  # Expected architecture (from the reference repository's training code):
+  #   EfficientNetB7(include_top=False) -> GlobalAveragePooling2D -> Dense(38, softmax)
+  # input:  224x224x3 float32
+  # output: 38-class probability vector
+  input_size: [224, 224]
+  expected_classes: 38
+
+preprocessing:
+  # divide_255  -> x / 255.0            (matches Keras default training)
+  # none        -> raw 0-255 float32
+  # imagenet    -> (x/255 - mean) / std
+  #
+  # NOTE: the reference repo's Live_Inference feeds raw 0-255 pixels, which is
+  # inconsistent with its own training pipeline. We follow the training pipeline.
+  type: divide_255
+  # Used only when type is imagenet
+  imagenet_mean: [0.485, 0.456, 0.406]
+  imagenet_std: [0.229, 0.224, 0.225]
+
+inference:
+  # Backend must be onnx or mock. tflite is declared for future use only.
+  backend: onnx
+  # Results below this are reported as class_name "Unknown" with
+  # reason "below_confidence_threshold" rather than forced to a disease.
+  confidence_threshold: 0.70
+  # Labels containing "healthy" (case-insensitive) set healthy=true.
+  healthy_keyword: healthy
+  # Fail loudly when label count != model output classes. Never guess.
+  strict_label_count: true
+
+camera:
+  # OpenCV device index for a USB webcam. CSI cameras need picamera2 instead;
+  # see src/camera.py for the abstraction.
+  device: 0
+  width: 640
+  height: 480
+  fps: 15
+
+logging:
+  enabled: false
+  results_dir: logs/results
+  images_dir: logs/images
+  # Save the annotated frame alongside each result.
+  save_annotated_images: false

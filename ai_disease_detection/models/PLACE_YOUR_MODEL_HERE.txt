@@ -1,0 +1,12 @@
+# Trained model goes here.
+#
+# Filename expected by config.yaml:
+#   models/disease_model.onnx
+#
+# The reference repository does NOT contain trained weights, so this file is
+# intentionally absent. Supply your own converted model:
+#
+#   Expected input:  [-1, 3, 224, 224]  float32  (NCHW)
+#   Expected output: [-1, 38]            float32  (38 softmax probabilities)
+#
+# See README "Next step" for conversion instructions.

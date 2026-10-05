@@ -1,0 +1,49 @@
+drone:
+  name: smart_farming_drone
+environment: default
+mavlink:
+  connection: ${MAVLINK_CONNECTION:/dev/ttyACM0}
+  baud: 115200
+  heartbeat_timeout_s: 5.0
+  reconnect_delay_s: 2.0
+telemetry:
+  rate_hz: 5
+  log_dir: data/logs
+  max_log_mb: 50
+mission:
+  max_altitude_m: 30.0
+  max_speed_mps: 8.0
+  default_takeoff_alt_m: 15.0
+safety:
+  minimum_battery_percent: 25
+  critical_battery_percent: 15
+  gps_required: true
+  min_satellites: 8
+  max_hdop: 1.5
+  geofence_margin_m: 5.0
+camera:
+  enabled: true
+  type: auto
+  width: 1280
+  height: 720
+  fps: 15
+obstacle_avoidance:
+  enabled: false
+  warning_distance_m: 5.0
+  critical_distance_m: 2.0
+  emergency_distance_m: 1.0
+precision_landing:
+  enabled: false
+  marker_type: aruco
+  max_descent_speed_mps: 0.8
+  marker_lost_timeout_s: 2.0
+disease_detection:
+  enabled: false
+  model_path: ""
+  confidence_threshold: 0.6
+  inference_interval_s: 2.0
+api:
+  host: 0.0.0.0
+  port: 8000
+database:
+  path: data/drone.db

@@ -1,0 +1,7 @@
+[Unit]
+Description=AgriDrone API
+[Service]
+ExecStart=/usr/bin/python3 -m drone.main
+Restart=always
+[Install]
+WantedBy=multi-user.target

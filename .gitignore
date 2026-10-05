@@ -1,0 +1,46 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+!.env.example
+data/logs/*
+data/*.db
+*.db
+!data/logs/.gitkeep
+node_modules/
+dashboard/dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.log
+.DS_Store
+
+# Trained model weights and artifacts. These are large binaries; do not commit
+# them without being asked explicitly.
+*.onnx
+*.h5
+*.keras
+*.tflite
+*.pt
+*.pth
+ai_disease_training/output/*
+!ai_disease_training/output/README.txt
+
+# PlantVillage dataset, in case it is extracted inside the repo.
+data/New Plant Diseases Dataset*/
+ai_disease_training/data/
+
+# Local scratch: caches, archives and stray patches.
+.ruff_cache/
+*.zip
+*.patch
+*.tar.gz
+
+# Uploaded models live here; keep them out of the repo.
+data/models/
+
+# Telemetry logs written at runtime.
+data/logs/
+!data/logs/.gitkeep

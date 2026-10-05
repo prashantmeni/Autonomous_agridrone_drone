@@ -1,0 +1,24 @@
+# Crop disease AI - minimal Raspberry Pi dependencies.
+#
+# Deliberately NOT included: tensorflow, torch, yolov5, ROS, MAVProxy,
+# ArduPilot, pymavlink. See README for the runtime decision.
+
+# Inference backend. Has a cp313 manylinux aarch64 wheel, so it works on
+# Raspberry Pi OS with Python 3.13.
+onnxruntime>=1.17
+
+# Image I/O and camera capture.
+opencv-python>=4.8
+
+# Array maths.
+numpy>=1.24
+
+# Config file parsing.
+PyYAML>=6.0
+
+# Testing only (dev dependency).
+pytest>=7.4
+
+# NOTE on tflite-runtime: intentionally omitted. There is no cp313 aarch64
+# wheel, and the `tensorflow` fallback is ~600 MB. If you need TFLite, run this
+# module in a Python 3.11 virtualenv, or convert your model to ONNX.

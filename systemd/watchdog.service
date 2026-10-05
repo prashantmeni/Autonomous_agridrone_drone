@@ -1,0 +1,7 @@
+[Unit]
+Description=AgriDrone watchdog
+[Service]
+ExecStart=/usr/bin/python3 scripts/check_hardware.py
+Restart=always
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+environment: development
+mavlink:
+  connection: udp://127.0.0.1:14540
+  baud: 115200
+telemetry:
+  rate_hz: 5
+camera:
+  enabled: false
+obstacle_avoidance:
+  enabled: false
+precision_landing:
+  enabled: false
+disease_detection:
+  enabled: false

@@ -1,0 +1,17 @@
+environment: production
+mavlink:
+  connection: ${MAVLINK_CONNECTION:/dev/ttyACM0}
+  baud: 115200
+telemetry:
+  rate_hz: 5
+camera:
+  enabled: true
+obstacle_avoidance:
+  enabled: false
+precision_landing:
+  enabled: false
+disease_detection:
+  enabled: false
+safety:
+  minimum_battery_percent: 25
+  gps_required: true

@@ -1,0 +1,151 @@
+# Crop disease classifier - training and export configuration
+#
+# Architecture shape matches the reference repository:
+#   EfficientNet*(include_top=False) -> GlobalAveragePooling2D -> Dense(38, softmax)
+#
+# Backbone is EfficientNetB0 (Raspberry Pi target) rather than the reference's
+# B7. Everything else - 224x224, 38 classes, softmax head, frozen backbone - is
+# unchanged.
+#
+# Nothing here is read by ai_disease_detection/ at runtime. This file only
+# governs the training run that produces disease_model.onnx.
+
+dataset:
+  # Root of the extracted dataset. The standard layout is:
+  #   <root>/train/<class>/*.jpg
+  #   <root>/valid/<class>/*.jpg
+  #   <root>/test/<class>/*.jpg
+  # Point this at wherever you mounted/extracted it.
+  root: "data/New Plant Diseases Dataset(Augmented)/New Plant Diseases Dataset(Augmented)"
+  train_dir: "train"
+  valid_dir: "valid"
+  test_dir: "test"
+  # Some copies use "validation" instead of "valid"; both are accepted and the
+  # first that exists wins.
+  valid_dir_alternatives: ["valid", "validation", "val"]
+  image_extensions: [".jpg", ".jpeg", ".png", ".bmp"]
+  # Class names are taken from this file, never from directory-listing order.
+  labels_file: "../ai_disease_detection/models/labels.txt"
+  # The real dataset's folders sort lexically differently from labels.txt.
+  # The explicit folder -> production-index mapping is the source of truth and
+  # train.py pins class_names from it, so index i always means labels.txt[i].
+  # Set true only if you want validation to abort on an ordering difference.
+  require_exact_label_order: false
+
+model:
+  # Backbone. EfficientNetB0 is the Raspberry Pi target: ~4x smaller and far
+  # cheaper than B7, while keeping the same 224x224 / 38-class contract.
+  # Supported: EfficientNetB0..B7 (see BACKBONES in train.py).
+  backbone: "EfficientNetB0"
+  include_top: false
+  weights: "imagenet"
+  input_height: 224
+  input_width: 224
+  num_classes: 38
+  # The reference froze the backbone and trained only the 38-unit head.
+  # Set true only if you intend to fine-tune (much slower, needs more VRAM).
+  freeze_backbone: true
+  # Softmax so exported probabilities sum to 1 and match the ONNX contract.
+  activation: "softmax"
+
+preprocessing:
+  # The PRODUCTION contract (ai_disease_detection/src/preprocessing.py):
+  #   rgb -> resize 224 -> float32 -> /255  ==  values in [0, 1]
+  # The ONNX graph accepts exactly that.
+  type: "divide_255"
+
+  # No external rescaling is applied during training or evaluation.
+  #
+  # Keras EfficientNet graphs already contain Rescaling(1/255) plus an
+  # ImageNet Normalization in their stem, and expect raw [0, 255] pixels.
+  # Adding another 1/255 here would scale every pixel twice and desynchronise
+  # training from inference. Instead, export_onnx.py prefixes the exported
+  # graph with Rescaling(255) so its input stays [0, 1] for production while
+  # the backbone still receives [0, 255].
+  #
+  # Verified against the real graph behaviour in verify_graph.py.
+  apply_in_graph: false
+
+training:
+  seed: 42
+  batch_size: 32          # lower to 8-16 if Colab VRAM is tight
+  epochs: 50              # upper bound; early stopping usually ends sooner
+  learning_rate: 0.001
+  loss: "categorical_crossentropy"
+  metrics: ["accuracy"]
+
+  # MEMORY SAFETY (Colab runs ~12 GB RAM)
+  # The dataset is streamed from disk. Never call .cache() with no argument:
+  # it caches the whole decoded split in RAM (~42 GB for 70k images at
+  # 224x224x3 float32) and crashes the session. Only a file-backed cache
+  # ("") would be RAM-safe, and it is unnecessary for 2-5 epochs.
+  prefetch_batches: 2     # bounded; AUTOTUNE buffers without bound
+  shuffle_buffer_batches: 200   # bounded; 70295 images * 224*224*3 = 10 GB!
+
+  # Augmentation applied to training images only, on-device per batch via a
+  # single tf.image.affine_transform. Documented operations:
+  #   rotation, width/height shift, shear, zoom, horizontal flip.
+  # No hue/saturation jitter: it would corrupt disease colour cues.
+  augmentation:
+    rotation_range: 40
+    width_shift_range: 0.2
+    height_shift_range: 0.2
+    shear_range: 0.2
+    zoom_range: 0.2
+    horizontal_flip: true
+    fill_mode: "nearest"
+  callbacks:
+    early_stopping:
+      enabled: true
+      monitor: "val_loss"
+      patience: 3
+      restore_best_weights: true
+    reduce_lr:
+      enabled: true
+      monitor: "val_loss"
+      factor: 0.5
+      patience: 1
+      min_lr: 1.0e-6
+    checkpoint:
+      enabled: true
+      monitor: "val_loss"
+      save_best_only: true
+      save_weights_only: false
+
+evaluation:
+  # Metrics computed on the held-out test split.
+  batch_size: 32
+  save_confusion_matrix: true
+  top_k: 5
+  # Bounded, and never .cache(): same OOM risk as training.
+  prefetch_batches: 2
+
+export:
+  onnx_filename: "disease_model.onnx"
+  keras_filename: "model2.h5"
+  # Opset 13 has broad runtime support, including onnxruntime on aarch64.
+  opset: 13
+  # Keep the Keras NHWC input and let the production engine transpose, OR
+  # export NCHW directly. See README "ONNX layout decision".
+  export_nchw: true
+  # Absolute paths must be false so Colab works without extra config.
+  use_absolute_paths: false
+
+validation:
+  # Keras vs ONNX agreement checks in validate_onnx.py.
+  num_images: 10
+  top_k: 5
+  # Top-1 probability difference above this is treated as a failure.
+  max_top1_diff: 0.01
+  # Class-index agreement must be exact.
+  require_same_top1: true
+
+output:
+  dir: "output"
+  model_h5: "model2.h5"
+  onnx: "disease_model.onnx"
+  class_names: "class_names.txt"
+  metrics: "metrics.json"
+  evaluation: "evaluation.txt"
+  training_config: "training_config.yaml"
+  label_mapping: "label_mapping.json"
