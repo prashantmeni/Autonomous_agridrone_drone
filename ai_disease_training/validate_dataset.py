@@ -162,14 +162,15 @@ def main(argv=None) -> int:
         print("  NOTE: strong imbalance; consider class_weight in train.py")
 
     if args.save_mapping:
-        out = save_json({
+        path = output_path(cfg, "label_mapping")
+        save_json({
             "num_classes": expected_n,
             "exact_order_match": exact_order,
             "mapping": mapping,
             "ordered_dataset_classes": ordered,
             "production_labels": labels,
-        }, output_path(cfg, "label_mapping"))
-        print(f"\nSaved mapping: {out}")
+        }, path)
+        print(f"\nSaved mapping: {path}")
 
     print("\nVALIDATION PASSED")
     return 0
