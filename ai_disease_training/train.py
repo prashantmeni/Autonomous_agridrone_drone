@@ -313,21 +313,28 @@ def build_datasets(cfg: dict, mapping: dict[str, int], labels: list[str]):
     batch_size = cfg["training"]["batch_size"]
 
     def make(info, shuffle):
+        # batch_size=None: the shuffle below has to run on individual images.
+        # Batching first would make buffer_size count batches, turning the
+        # 4096-IMAGE cap into 4096 batches (~79 GB at 32 x 602112 bytes), and
+        # filling it exhausts Colab host RAM. The cap is only correct in image
+        # units, so load unbatched, shuffle, then batch.
         dataset = tf.keras.utils.image_dataset_from_directory(
             str(info.root),
             image_size=(h, w),
-            batch_size=batch_size,
+            batch_size=None,
             label_mode="categorical",
             class_names=class_names,   # index i -> labels.txt[i]
             shuffle=False,            # shuffling is done explicitly below
         )
         if shuffle:
             # Explicit reshuffle each epoch with a bounded shuffle buffer.
-            # A huge buffer here would itself be a RAM sink.
+            # A huge buffer here would itself be a RAM sink, so the cap binds:
+            # min(200 * 32, 4096) = 4096 images, never 4096 batches.
             dataset = dataset.shuffle(
                 buffer_size=min(buffer * batch_size, 4096),
                 reshuffle_each_iteration=True,
             )
+        dataset = dataset.batch(batch_size=batch_size)
         if shuffle:
             dataset = augment_batches(dataset, cfg, h, w)
         # No .cache(): stream from disk every pass.
