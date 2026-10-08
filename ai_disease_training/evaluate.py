@@ -156,8 +156,10 @@ def main(argv=None) -> int:
     # (num images x 38 float32 is ~2.7 MB at this split size; acceptable.)
     y_pred_list = []
     y_true_list = []
+    probs_list = []
     for step, (images, labels_batch) in enumerate(dataset):
         probs = model.predict(images, verbose=0)
+        probs_list.append(probs)
         y_pred_list.append(np.argmax(probs, axis=1))
         y_true_list.append(np.argmax(labels_batch.numpy(), axis=1))
         if step % 50 == 0:
@@ -167,6 +169,11 @@ def main(argv=None) -> int:
               else np.array([], dtype=int))
     y_true = (np.concatenate(y_true_list) if y_true_list
               else np.array([], dtype=int))
+    # Full probability matrix for top-k below. Without this the name `probs`
+    # would still hold only the LAST batch, and top-k indexing past that
+    # batch's row count raises IndexError.
+    probs = (np.concatenate(probs_list) if probs_list
+             else np.zeros((0, n), dtype=np.float32))
 
     if y_true.shape[0] != y_pred.shape[0]:
         print(f"FATAL: prediction/label count mismatch "
