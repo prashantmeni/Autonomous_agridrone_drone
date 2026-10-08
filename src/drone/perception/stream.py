@@ -63,6 +63,69 @@ class _V4L2BayerCapture:
         self._cap.release()
 
 
+class _Picamera2Capture:
+    """CSI (MIPI) capture via libcamera/picamera2 — Raspberry Pi camera modules.
+
+    OpenCV's raw V4L2 reads of a unicam device (OV5647/IMX219...) are not
+    reliable: the node is a raw Bayer/ISP source that can stall entire
+    pipelines, and rgb/sensor buffers are negotiated by libcamera. picamera2
+    handles the full ISP path, so this backend is used whenever `type` is
+    picamera2/csi/pi. Returns BGR frames (BGR888), matching the pipeline.
+
+    picamera2 is an optional dependency; without it the service reports
+    CAMERA_UNAVAILABLE instead of importing a heavy stack.
+    """
+
+    def __init__(self, size, fps: int):
+        self._size = size
+        self._fps = max(1, int(fps))
+        self._cam = None
+
+    def open(self) -> bool:
+        try:
+            from picamera2 import Picamera2
+        except Exception as e:
+            log.warning("picamera2 backend unavailable: %s", e)
+            return False
+        cam = Picamera2()
+        w, h = self._size
+        cam.configure(cam.create_video_configuration(
+            main={"size": (w, h), "format": "BGR888"},
+            controls={"FrameRate": float(self._fps)},
+        ))
+        cam.start()
+        self._cam = cam
+        return True
+
+    def isOpened(self) -> bool:
+        return self._cam is not None
+
+    def read(self):
+        if self._cam is None:
+            return False, None
+        try:
+            arr = self._cam.capture_array()
+        except Exception as e:
+            log.warning("picamera2 read failed: %s", e)
+            return False, None
+        if arr is None or arr.size == 0:
+            return False, None
+        return True, arr  # BGR888 -> BGR, matches the pipeline expectation
+
+    def release(self) -> None:
+        cam, self._cam = self._cam, None
+        if cam is not None:
+            try:
+                cam.stop()
+                cam.close()
+            except Exception as e:
+                log.debug("picamera2 release failed: %s", e)
+
+
+def _camera_kind(cfg) -> str:
+    return (getattr(cfg, "type", "auto") or "auto").strip().lower()
+
+
 class CameraService:
     def __init__(self, cfg, record_dir: str = "data/recordings"):
         self.cfg = cfg
@@ -111,10 +174,23 @@ class CameraService:
     def _open_capture(self, cv2):
         """Open the camera, negotiating a geometry the sensor actually supports.
 
-        Returns an opened capture, or None when no geometry yields frames. The
-        granted size is written back to self._size so status and recording
-        agree with the real frames.
+        Types picamera2/csi/pi use libcamera (the reliable path for Raspberry
+        Pi camera modules). Everything else uses the V4L2 sweep below. Returns
+        an opened capture, or None when no geometry yields frames. The granted
+        size is written back to self._size so status and recording agree with
+        the real frames.
         """
+        kind = _camera_kind(self.cfg)
+        if kind in ("picamera2", "csi", "pi"):
+            cap = _Picamera2Capture(
+                (int(self.cfg.width), int(self.cfg.height)), self._fps
+            )
+            if cap.open():
+                log.info("picamera2 camera opened at %sx%s", *self._size)
+                return cap
+            cap.release()
+            return None
+
         dev = getattr(self.cfg, "device", "") or self._DEFAULT_DEVICE
 
         # Preferred order: configured geometry first, then fallbacks.

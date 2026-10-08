@@ -6,6 +6,12 @@ telemetry:
   rate_hz: 5
 camera:
   enabled: true
+  # CSI camera module (Raspberry Pi OV5647) via libcamera/picamera2. `auto`
+  # would try raw V4L2 Bayer reads, which stall on unicam nodes.
+  type: picamera2
+  width: 640
+  height: 480
+  fps: 15
 obstacle_avoidance:
   enabled: false
 precision_landing:
