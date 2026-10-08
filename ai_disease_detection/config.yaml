@@ -2,11 +2,19 @@
 # Standalone module. No flight-control settings here by design.
 
 model:
-  # Place your converted ONNX model here. The reference repository does NOT
-  # ship trained weights, so this file is intentionally absent until you supply one.
-  path: models/disease_model.onnx
+  # Default deployment: cropguard urbane (static-int8 ResNet50) from Hugging
+  # Face AbhiCommits/cropguard-models. ~99.1% test accuracy on a leaf-grouped
+  # PlantVillage test split (8,125 images); 38 classes in the same order as
+  # labels.txt. Measured on Raspberry Pi 4B: ~146 ms/inference (~6.8 FPS).
+  #   source: https://huggingface.co/AbhiCommits/cropguard-models
+  path: models/cropguard_int8.onnx
   labels: models/labels.txt
-
+  #
+  # Alternative: our own self-trained EfficientNetB0 export (imagenet
+  # pretrained, 38-class). Uses divide_255 and is NOT normalization-compatible
+  # with cropguard. Swap back to it with:
+  #   path: models/disease_model.onnx
+  #   preprocessing.type: divide_255
   # Expected architecture (from the reference repository's training code):
   #   EfficientNetB7(include_top=False) -> GlobalAveragePooling2D -> Dense(38, softmax)
   # input:  224x224x3 float32
@@ -15,13 +23,12 @@ model:
   expected_classes: 38
 
 preprocessing:
-  # divide_255  -> x / 255.0            (matches Keras default training)
-  # none        -> raw 0-255 float32
-  # imagenet    -> (x/255 - mean) / std
+  # cropguard ONNX (timm ResNet50 export) expects ImageNet-normalized input:
+  #   imagenet    -> (x/255 - mean) / std
   #
-  # NOTE: the reference repo's Live_Inference feeds raw 0-255 pixels, which is
-  # inconsistent with its own training pipeline. We follow the training pipeline.
-  type: divide_255
+  # divide_255  -> x / 255.0            (matches our Keras training pipeline)
+  # none        -> raw 0-255 float32
+  type: imagenet
   # Used only when type is imagenet
   imagenet_mean: [0.485, 0.456, 0.406]
   imagenet_std: [0.229, 0.224, 0.225]
