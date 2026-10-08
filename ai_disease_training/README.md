@@ -3,12 +3,18 @@
 Produces `disease_model.onnx` for the production inference module in
 `ai_disease_detection/`.
 
-**This directory contains no model.** It is the pipeline that will create one.
-Until a training run actually completes, `ai_disease_detection/models/` has no
-`disease_model.onnx` and real inference is impossible. Do not claim otherwise.
+**No model is committed.** Training artifacts live in `output/` (gitignored);
+`ai_disease_detection/models/` gains `disease_model.onnx` only when it is
+deployed (step 6). Do not claim inference works before then.
 
-> **Trained model: DOES NOT EXIST YET.**
-> **Training metrics: NONE. No training run has been performed.**
+> **Status after the 2026-10-08 smoke-test run (Colab, 2 epochs):**
+> **Model: smoke test only.** `output/model2.h5`; train accuracy 0.9340,
+> val accuracy 0.7370, val loss 0.79981 (best weights restored from epoch 2).
+> **Evaluation (validation split — NOT held-out):** Top-1 0.7370, Top-5 0.9702,
+> macro F1 0.7425. The Kaggle dataset has no usable `test/` split, so these
+> are validation figures and are optimistic.
+> **ONNX export: validated.** `disease_model.onnx` (15.5 MB, opset 13, NCHW);
+> Keras vs ONNX agreement 10/10, worst probability diff 1.788e-06 (tol 0.01).
 > **Raspberry Pi performance: NOT MEASURED.**
 
 ---
@@ -105,8 +111,9 @@ are unknown and are not claimed.
 pip install -r requirements.txt
 ```
 
-Do **not** run this on the Raspberry Pi. EfficientNetB7 is ~66 M parameters; on
-a 3.7 GB CPU-only Pi a single epoch would take many hours.
+Do **not** run this on the Raspberry Pi: training needs a GPU. Even with our
+EfficientNetB0 (4 M parameters) a CPU-only Pi would need many hours per epoch
+on a 70k-image dataset.
 
 ---
 
@@ -203,6 +210,11 @@ python train.py --unfreeze              # full fine-tune (much slower)
 python evaluate.py --split test
 ```
 
+The Kaggle archive ships no class-structured `test/` split; with that dataset
+pass `--split valid` instead (that is what the recorded run did). The report
+then states the figures are validation-set and `metrics.json` records
+`is_true_test_set: false`.
+
 Writes `output/metrics.json` and `output/evaluation.txt` with accuracy,
 macro precision/recall/F1, weighted F1, top-5 accuracy, per-class figures, and
 the full confusion matrix.
@@ -219,6 +231,8 @@ Verifies the input/output signature and runs a smoke test.
 
 ```bash
 python validate_onnx.py --num-images 25 --max-top1-diff 0.01
+# Kaggle dataset (no usable test/ split):
+python validate_onnx.py --split valid
 ```
 
 Compares top-1 class, top-1 probability, and top-5 overlap. Exits non-zero on
@@ -275,7 +289,7 @@ ai_disease_training/
 ├── config.yaml
 ├── common.py            config, dataset discovery, label mapping
 ├── validate_dataset.py  fail-fast dataset check
-├── train.py             EfficientNetB7 training
+├── train.py             EfficientNetB0 training (backbone from config)
 ├── evaluate.py          metrics + confusion matrix
 ├── export_onnx.py       Keras -> ONNX with layout handling
 ├── validate_onnx.py     Keras vs ONNX agreement
@@ -330,11 +344,14 @@ pipeline).
   future telemetry bridge would fill them. This module has no MAVLink.
 - **No flight control.** The AI cannot arm, land, change mode, or write PX4
   parameters. It produces a class name and a score, nothing more.
-- **Performance is hardware-dependent.** EfficientNetB7 float32 at 224×224 is
-  heavy; real-time on a Pi 4 is unlikely without quantisation. If too slow, the
+- **Performance is hardware-dependent and not yet measured on the Pi.** The
+  model is EfficientNetB0 float32 at 224×224; run the step-7 script on the
+  Pi before claiming real-time. If too slow, the
   inference interface accepts a lighter model — an int8 MobileNetV3 or
   EfficientNet-lite trained on the same 38 classes — with no code change.
 - **Confidence is not a field guarantee.** A softmax score measures agreement
   with training data, not real-world diagnostic certainty. Get an
   agronomist's review before acting on any result.
-- **Accuracy is unknown until trained.** No numbers here are real yet.
+- **Accuracy figures come from a 2-epoch smoke test on the validation
+  split.** They verify the pipeline runs end-to-end, not model quality. A full
+  training run and a held-out test set are needed before quoting accuracy.
