@@ -100,7 +100,11 @@ def wrap_nchw(model, height: int, width: int):
     inp = tf.keras.Input(shape=(3, height, width), name="input_nchw", dtype=tf.float32)
     # [0, 1] -> [0, 255] so the backbone sees the range it was trained on.
     x = tf.keras.layers.Rescaling(255.0)(inp)
-    x = tf.transpose(x, perm=[0, 2, 3, 1])  # NCHW -> NHWC
+    # NCHW -> NHWC. A Permute layer, not tf.transpose: tf.transpose cannot
+    # take a symbolic KerasTensor (Keras 3 raises "A KerasTensor cannot be
+    # used as input to a TensorFlow function"), and Permute works on both
+    # Keras 2 and 3 and exports to ONNX as a plain Transpose.
+    x = tf.keras.layers.Permute((2, 3, 1))(x)
     out = model(x, training=False)
     wrapped = tf.keras.Model(inp, out, name="crop_disease_nchw")
     return wrapped
