@@ -11,7 +11,7 @@ obstacle_avoidance:
 precision_landing:
   enabled: false
 disease_detection:
-  enabled: false
+  enabled: true
 safety:
   minimum_battery_percent: 25
   gps_required: true

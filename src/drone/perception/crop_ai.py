@@ -192,16 +192,14 @@ def analyze(frame, model_path, confidence_threshold: float,
     labels = load_labels()
     engine = build_engine(model_path, labels)
 
-    # Use the module's real config dataclasses rather than a hand-rolled stub,
-    # so the pipeline sees the exact field layout it expects.
+    # Use the module's deployed config (ai_disease_detection/config.yaml) so
+    # preprocessing (type, mean/std) and model contract always match the model
+    # that config points at — e.g. cropguard needs ImageNet normalization, not
+    # the divide_255 default. Only the drone's own handling knobs are overridden.
     cfg_cls = mod["config"]
-    cfg = cfg_cls.Config(
-        preprocess=cfg_cls.PreprocessConfig(),
-        inference=cfg_cls.InferenceConfig(
-            confidence_threshold=float(confidence_threshold),
-            healthy_keyword=healthy_keyword,
-        ),
-    )
+    cfg = cfg_cls.load_config()
+    cfg.inference.confidence_threshold = float(confidence_threshold)
+    cfg.inference.healthy_keyword = healthy_keyword
     cfg.skip_image_quality_check = False
 
     result = mod["pipeline"].run_inference(

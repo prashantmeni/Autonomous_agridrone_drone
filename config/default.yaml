@@ -39,8 +39,9 @@ precision_landing:
   marker_lost_timeout_s: 2.0
 disease_detection:
   enabled: false
-  model_path: ""
-  confidence_threshold: 0.6
+  # Standard deployed model, relative to the repo root (drone runs from there).
+  model_path: "ai_disease_detection/models/cropguard_int8.onnx"
+  confidence_threshold: 0.7
   inference_interval_s: 2.0
 api:
   host: 0.0.0.0
