@@ -47,7 +47,13 @@ def dataset_for(images):
 def run(images, **aug):
     out = list(train.augment_batches(dataset_for(images), cfg(**aug),
                                      SIZE, SIZE))
-    return [o[0].numpy() for o in out]
+    # dataset_for() batches by 1, so drop that axis. frames() hands out single
+    # (SIZE, SIZE, 3) images, so returning the batched tensor here made every
+    # comparison below succeed only by broadcast accident while
+    # test_shape_is_preserved caught the mismatch. Indexing [0] still surfaces
+    # any genuine shape change from the op: an added dim leaves (1, SIZE, SIZE,
+    # 3) behind and a removed batch dim leaves (SIZE, 3).
+    return [o[0].numpy()[0] for o in out]
 
 
 def test_augmentation_runs_without_name_error():
