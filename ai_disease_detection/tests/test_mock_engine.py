@@ -158,13 +158,22 @@ def test_default_config_targets_224_and_38_classes():
     assert cfg.inference.backend == "onnx"
 
 
-def test_default_normalization_is_divide_255():
-    assert load_config().preprocess.type == "divide_255"
+def test_default_normalization_is_imagenet_for_cropguard():
+    assert load_config().preprocess.type == "imagenet"
+
+
+def test_divide_255_remains_a_supported_option():
+    from ai_disease.config import PreprocessConfig
+    from ai_disease.preprocessing import validate_normalization
+
+    assert validate_normalization("divide_255") == "divide_255"
+    cfg = PreprocessConfig(type="divide_255")
+    assert cfg.type == "divide_255"
 
 
 def test_model_path_points_at_expected_location():
     cfg = load_config()
-    assert cfg.model_file.name == "disease_model.onnx"
+    assert cfg.model_file.name == "cropguard_int8.onnx"
     assert cfg.model_file.parent.name == "models"
 
 

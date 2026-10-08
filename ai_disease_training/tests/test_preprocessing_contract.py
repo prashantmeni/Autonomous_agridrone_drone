@@ -145,9 +145,12 @@ def test_production_preprocessing_emits_unit_range():
     assert "return x / 255.0" in pre
 
 
-def test_production_config_still_declares_divide_255():
+def test_production_config_defaults_to_imagenet_and_keeps_divide_255():
     cfg = (DETECTION / "config.yaml").read_text(encoding="utf-8")
-    assert 'type: divide_255' in cfg or 'type: "divide_255"' in cfg
+    # Default deployment is the cropguard int8 ResNet50 (ImageNet-normalised).
+    assert "type: imagenet" in cfg or 'type: "imagenet"' in cfg
+    # The self-trained divide_255 export must stay documented and supported.
+    assert "divide_255" in cfg
 
 
 # ------------------------------------------------- validation script agrees

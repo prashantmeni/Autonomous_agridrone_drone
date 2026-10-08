@@ -7,16 +7,23 @@ Produces `disease_model.onnx` for the production inference module in
 `ai_disease_detection/models/` gains `disease_model.onnx` only when it is
 deployed (step 6). Do not claim inference works before then.
 
-> **Status after the 2026-10-08 smoke-test run (Colab, 2 epochs):**
-> **Model: smoke test only.** `output/model2.h5`; train accuracy 0.9340,
-> val accuracy 0.7370, val loss 0.79981 (best weights restored from epoch 2).
-> **Evaluation (validation split — NOT held-out):** Top-1 0.7370, Top-5 0.9702,
-> macro F1 0.7425. The Kaggle dataset has no usable `test/` split, so these
-> are validation figures and are optimistic.
-> **ONNX export: validated.** `disease_model.onnx` (15.5 MB, opset 13, NCHW);
-> Keras vs ONNX agreement 10/10, worst probability diff 1.788e-06 (tol 0.01).
-> **Raspberry Pi performance (Pi 4 Model B):** inference mean 96.6 ms, min
-> 94.8, max 106.2 ≈ 10.4 FPS (measured 2026-10-08).
+> **Status after the 2026-10-08 deployment:**
+> **Default deployment model: cropguard (third-party, NOT ours).** Static-int8
+> ResNet50 ONNX from Hugging Face `AbhiCommits/cropguard-models`
+> (`cropguard.static-int8.onnx`, 23.8 MB). The author reports **99.1% test
+> accuracy** (8,125 images) on a **leaf-grouped** PlantVillage split (no
+> near-duplicate leakage). We have not re-measured this accuracy ourselves; it
+> is their number. Class order matches our `labels.txt` (38/38, index-identical;
+> 3 label strings differ only by underscore/space).
+> **Verified on the Pi (2026-10-08):** input contract is ImageNet-normalized
+> NCHW float32 `(x/255−mean)/std` with mean `[0.485,0.456,0.406]`, std
+> `[0.229,0.224,0.225]`. Real PlantVillage leaf under cropguard + our pipeline:
+> `Tomato___Bacterial_spot` @ 0.941 — correct. Inference mean 146 ms, min 94
+> ms range ~6.5–7 FPS; pipeline total ~156 ms/image.
+> **Self-trained model: smoke test only (kept as `divide_255` profile).**
+> The `disease_model.onnx` (EfficientNetB0, 15.5 MB) from the 2026-10-08
+> 2-epoch run reached val accuracy 0.7370; NOT the default and not accuracy-competitive
+> with cropguard. Do not report its validation numbers as product accuracy.
 
 ---
 
@@ -246,6 +253,17 @@ scp output/disease_model.onnx \
     agridrone123@192.168.29.72:/home/agridrone123/agridrone/ai_disease_detection/models/
 ```
 
+**Alternative: third-party pretrained model (default deployment, no training
+compute needed).** The self-trained `disease_model.onnx` is a 2-epoch smoke
+test and is beaten by the hosted cropguard ResNet50 int8. Fetch it directly on
+the Pi (23.8 MB), then make sure `ai_disease_detection/config.yaml` uses
+`imagenet` preprocessing (see the status block at the top of this file):
+
+```bash
+curl -sL -o ~/agridrone/ai_disease_detection/models/cropguard_int8.onnx \
+  "https://huggingface.co/AbhiCommits/cropguard-models/resolve/main/cropguard.static-int8.onnx"
+```
+
 Then on the Pi:
 
 ```bash
@@ -278,8 +296,9 @@ PY
 ```
 
 Measured 2026-10-08 on a **Raspberry Pi 4 Model B** (4 cores, 3.7 GB RAM,
-kernel `6.18.50+rpt-rpi-v8`), onnxruntime 1.30.0, `disease_model.onnx`
-(EfficientNetB0, 2-epoch smoke-test weights):
+kernel `6.18.50+rpt-rpi-v8`), onnxruntime 1.30.0.
+
+`disease_model.onnx` (EfficientNetB0, 2-epoch smoke-test weights):
 
 | Metric | Value |
 |---|---|
@@ -288,8 +307,19 @@ kernel `6.18.50+rpt-rpi-v8`), onnxruntime 1.30.0, `disease_model.onnx`
 | Inference min / max | 94.8 / 106.2 ms |
 | Throughput | ≈ 10.4 FPS |
 
+`cropguard_int8.onnx` (static-int8 ResNet50, current default — expected to be
+slower per image but ~99.1% reported accuracy):
+
+| Metric | Value |
+|---|---|
+| Inference mean | 146 ms |
+| Pipeline total (incl. preprocess) | ≈ 156 ms |
+| Throughput | ≈ 6.8 FPS |
+
 Flat/gray frames are rejected by the image-quality gate before the model runs,
-so benchmark against a real capture (or pass `--log`-style real frames).
+so benchmark against a real capture (or pass `--log`-style real frames). Cropguard
+was benchmarked through the full pipeline (`image_inference.py --json`) on the
+same Pi; its 146 ms mean came from a 3-second loop over the same frame.
 
 ---
 
