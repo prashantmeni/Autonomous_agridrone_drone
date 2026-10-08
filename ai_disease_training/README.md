@@ -26,6 +26,12 @@ deployed (step 6). Do not claim inference works before then.
 > the same leaf at 0.195/Unknown). Via the live drone API
 > `POST /api/disease/analyze`: `Tomato___Bacterial_spot` @ 0.941, and
 > `GET /api/crop-ai/model` reports `cropguard_int8.onnx` / 38 labels / OK.
+> **In-flight monitor (2026-10-08):** when `disease_detection.enabled: true`,
+> `CropAIMonitor` (`src/drone/perception/crop_monitor.py`) classifies the live
+> camera frame every `inference_interval_s` (default 2 s), stores reliable
+> above-threshold detections in `detections` with GPS, and broadcasts each
+> result over the WebSocket as `{"type": "crop_ai"}`. Camera absent / quality
+> rejects are logged and skipped; the loop cannot take the app down.
 > **Self-trained model: smoke test only (kept as `divide_255` profile).**
 > The `disease_model.onnx` (EfficientNetB0, 15.5 MB) from the 2026-10-08
 > 2-epoch run reached val accuracy 0.7370; NOT the default and not accuracy-competitive

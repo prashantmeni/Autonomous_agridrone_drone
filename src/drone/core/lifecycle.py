@@ -26,6 +26,13 @@ class DroneApp:
         await asyncio.to_thread(self.conn.connect)
         await asyncio.to_thread(self.conn.wait_heartbeat, 8.0)
         self._tasks = [asyncio.create_task(self.conn.maintain()), asyncio.create_task(self._telemetry_loop())]
+        if self.cfg.disease_detection.enabled:
+            from ..perception.crop_monitor import CropAIMonitor
+            monitor = CropAIMonitor(self)
+            self._tasks.append(asyncio.create_task(monitor.run()))
+            log.info("crop monitor started (interval=%.1fs model=%s)",
+                     self.cfg.disease_detection.inference_interval_s,
+                     self.cfg.disease_detection.model_path)
         log.info(f"DroneApp started env={self.cfg.environment} connected={self.conn.connected}")
 
     async def _telemetry_loop(self):
