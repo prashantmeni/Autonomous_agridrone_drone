@@ -37,6 +37,19 @@ deployed (step 6). Do not claim inference works before then.
 > above-threshold detections in `detections` with GPS, and broadcasts each
 > result over the WebSocket as `{"type": "crop_ai"}`. Camera absent / quality
 > rejects are logged and skipped; the loop cannot take the app down.
+> **Aerial-frame scan (2026-10-08):** wide frames are auto-cropped into
+> 224&times;224 tiles (`ai_disease_detection/ai_disease/tiling.py`) and each
+> tile classified; the best tile is reported with a `tiles` grid for overlays.
+> The in-flight monitor always scans; `POST /api/disease/analyze` scans when
+> `tiled.enabled: true`. Leaf-sized frames always take the single-inference
+> path. Measured on the Pi 4B (cropguard int8, 640x480 frame): 9 tiles &asymp;
+> 1.4 s at stride 224, 30 tiles &asymp; 4.6 s at stride 112.
+> **Measured detection floor (Pi 4B):** cropguard keeps a disease only while a
+> leaf fills &ge; ~56% of tile area (leaf &ge; ~170 px in a 224 tile; 100% fill
+> 0.94, 75% 0.73, 60% Unknown 0.59, 15% background-wins 0.84). A leaf straddling
+> a tile seam is missed at stride 224 and rescued by stride 112. Practical
+> consequence: tile scanning is for close-to-canopy passes; true field-altitude
+> detection still needs a leaf-ROI stage in front of the classifier.
 > **Self-trained model: smoke test only (kept as `divide_255` profile).**
 > The `disease_model.onnx` (EfficientNetB0, 15.5 MB) from the 2026-10-08
 > 2-epoch run reached val accuracy 0.7370; NOT the default and not accuracy-competitive

@@ -51,12 +51,21 @@ tiled:
   # into tiles, each classified, and the best tile reported. Small/leaf-sized
   # frames always take the single-inference path.
   #
-  # enabled: true makes /api/disease/analyze as well as the camera monitor scan
-  # wide frames; the in-flight monitor always scans regardless of this switch.
-  # stride == tile_size -> complete gapless coverage, no overlap.
-  # stride <  tile_size -> overlapping tiles: better recall, more CPU.
-  # Raspberry Pi 4B (cropguard int8): a 640x480 frame at tile 224/stride 224
-  # is ~9 tiles, ~1.4 s; at stride 112 it is ~30 tiles, ~4.6 s.
+  # Overlap vs recall (measured, cropguard int8 on a real background leaf):
+  #   leaf >= 75% of tile side -> reliable disease   (conf ~0.73+)
+  #   leaf ~60%                -> Unknown (~0.59)
+  #   leaf 15% (background dominant) -> classified as background crop/healthy
+  # So a tile scan only works at close range, where a leaf fills ~2/3 of a
+  # tile. A leaf straddling a tile seam is silently lost unless tiles overlap:
+  # stride == tile_size -> complete gapless coverage, no overlap, seam-blind.
+  # stride <  tile_size -> overlaps catch seam-boundary leaves, more CPU.
+  # Raspberry Pi 4B (cropguard int8): a 640x480 frame -> ~9 tiles ~1.4 s at
+  # stride 224, ~30 tiles ~4.6 s at stride 112 (one 112-overlap tile rescued
+  # a seam-straddling leaf that stride 224 missed entirely).
+  #
+  # enabled: true makes /api/disease/analyze scan wide frames; the in-flight
+  # monitor always scans regardless of this switch. True aerial-altitude
+  # detection still needs a leaf-ROI stage in front of the classifier.
   enabled: false
   tile_size: 224
   stride: 224
