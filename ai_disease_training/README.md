@@ -15,7 +15,8 @@ deployed (step 6). Do not claim inference works before then.
 > are validation figures and are optimistic.
 > **ONNX export: validated.** `disease_model.onnx` (15.5 MB, opset 13, NCHW);
 > Keras vs ONNX agreement 10/10, worst probability diff 1.788e-06 (tol 0.01).
-> **Raspberry Pi performance: NOT MEASURED.**
+> **Raspberry Pi performance (Pi 4 Model B):** inference mean 96.6 ms, min
+> 94.8, max 106.2 ≈ 10.4 FPS (measured 2026-10-08).
 
 ---
 
@@ -258,14 +259,15 @@ cd ~/agridrone/ai_disease_detection
 ```bash
 cd ~/agridrone/ai_disease_detection
 ../.venv/bin/python - <<'PY'
-import time, numpy as np
-from src.config import load_config
-from src.pipeline import build_engine, run_inference
+import time
+from ai_disease.config import load_config
+from ai_disease.pipeline import build_engine, run_inference
+from ai_disease.preprocessing import load_image
 cfg = load_config()
 t0 = time.perf_counter(); engine = build_engine(cfg)
 print(f"model load: {time.perf_counter()-t0:.2f} s")
-frame = np.full((480, 640, 3), 120, dtype=np.uint8)
-run_inference(frame, engine, cfg)                      # warm up
+frame = load_image("leaf.jpg")                    # a real capture, not a flat frame
+run_inference(frame, engine, cfg)                       # warm up
 lat = []
 for _ in range(30):
     lat.append(run_inference(frame, engine, cfg).inference_ms)
@@ -275,8 +277,19 @@ print(f"=> {1000/avg:.1f} FPS")
 PY
 ```
 
-Record only what you actually measure. **No performance numbers appear in this
-README because none have been measured.**
+Measured 2026-10-08 on a **Raspberry Pi 4 Model B** (4 cores, 3.7 GB RAM,
+kernel `6.18.50+rpt-rpi-v8`), onnxruntime 1.30.0, `disease_model.onnx`
+(EfficientNetB0, 2-epoch smoke-test weights):
+
+| Metric | Value |
+|---|---|
+| Model load | 0.28 s |
+| Inference mean | 96.6 ms |
+| Inference min / max | 94.8 / 106.2 ms |
+| Throughput | ≈ 10.4 FPS |
+
+Flat/gray frames are rejected by the image-quality gate before the model runs,
+so benchmark against a real capture (or pass `--log`-style real frames).
 
 ---
 
