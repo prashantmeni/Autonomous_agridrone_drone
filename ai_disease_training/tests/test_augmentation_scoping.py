@@ -58,13 +58,19 @@ def _augment_like_train(rotation, wshift, hshift, shear, zoom, flip,
                 np.zeros_like(theta),
             ], axis=-1),
         ], axis=1)
-        transforms = np.stack([
-            np.stack([composed[:, 0, 0], composed[:, 0, 1], tx], axis=-1),
-            np.stack([composed[:, 1, 0], composed[:, 1, 1], ty], axis=-1),
-        ], axis=1)
-        assert transforms.shape == (n, 2, 3)
-        # Stand in for tf.image.affine_transform: mark that it ran.
-        x = x * scale.reshape(-1, 1, 1, 1)
+        # Same tail steps as train.py: fold zoom into the forward matrix,
+        # invert the homogeneous 3x3, flatten to the (n, 8) the op accepts.
+        lin = composed[:, :, :2] / scale[:, None, None]
+        fwd = np.zeros((n, 3, 3))
+        fwd[:, :2, :2] = lin
+        fwd[:, 0, 2] = tx
+        fwd[:, 1, 2] = ty
+        fwd[:, 2, 2] = 1.0
+        inv = np.linalg.inv(fwd)
+        transforms = inv.reshape(-1, 9)[:, :8]
+        assert transforms.shape == (n, 8)
+        # Stand in for tf.raw_ops.ImageProjectiveTransformV3: it is what
+        # resamples pixels in train.py, so this mirror stops at the transform.
     x = np.clip(x, 0.0, 255.0)
     return x
 

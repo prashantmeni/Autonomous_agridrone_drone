@@ -83,7 +83,7 @@ training:
   shuffle_buffer_batches: 200   # bounded; 70295 images * 224*224*3 = 10 GB!
 
   # Augmentation applied to training images only, on-device per batch via a
-  # single tf.image.affine_transform. Documented operations:
+  # single tf.raw_ops.ImageProjectiveTransformV3. Documented operations:
   #   rotation, width/height shift, shear, zoom, horizontal flip.
   # No hue/saturation jitter: it would corrupt disease colour cues.
   augmentation:

@@ -108,3 +108,92 @@ def test_batch_elements_are_independent():
 def test_no_angle_produces_nan(deg):
     m = compose(np.array([np.deg2rad(deg)]), np.array([0.0]))
     assert np.isfinite(m).all()
+
+
+# --------------------------------------- forward matrix -> op's flat transform
+# train.py folds zoom into the forward matrix, inverts the 3x3 homogeneous
+# matrix, then flattens it to the (batch, 8) the projective op accepts. That
+# step is pure linear algebra, so it is verified here rather than first running
+# in Colab.
+def forward(theta, phi, scale, tx, ty) -> np.ndarray:
+    """train.py's `fwd`: forward 3x3 homogeneous matrix, (batch, 3, 3)."""
+    lin = compose(theta, phi)[:, :, :2] / scale[:, None, None]
+    n = theta.shape[0]
+    fwd = np.zeros((n, 3, 3), dtype=lin.dtype)
+    fwd[:, :2, :2] = lin
+    fwd[:, 0, 2] = tx
+    fwd[:, 1, 2] = ty
+    fwd[:, 2, 2] = 1.0
+    return fwd
+
+
+def op_transform(theta, phi, scale, tx, ty) -> np.ndarray:
+    """train.py's `transforms`: inverted and flattened, (batch, 8)."""
+    return np.linalg.inv(forward(theta, phi, scale, tx, ty)).reshape(-1, 9)[:, :8]
+
+
+def to_homogeneous(flat: np.ndarray) -> np.ndarray:
+    """(n, 8) flat affine form back to (n, 3, 3): append the [0, 0, 1] row."""
+    return np.concatenate([flat, np.ones((flat.shape[0], 1))], axis=1) \
+        .reshape(-1, 3, 3)
+
+
+def test_op_transform_shape_is_batch_by_8():
+    n = 4
+    out = op_transform(np.zeros(n), np.zeros(n), np.ones(n),
+                       np.zeros(n), np.zeros(n))
+    assert out.shape == (n, 8)
+
+
+def test_op_transform_is_identity_when_every_param_is_zero():
+    m = op_transform(np.array([0.0]), np.array([0.0]), np.array([1.0]),
+                     np.array([0.0]), np.array([0.0]))
+    assert np.allclose(m[0], [1, 0, 0, 0, 1, 0, 0, 0], atol=1e-12)
+
+
+def test_op_transform_is_the_exact_inverse_of_forward():
+    """The op maps output coords -> input coords, the opposite of `fwd`."""
+    theta = np.array([0.3, -0.7])
+    phi = np.array([0.1, -0.2])
+    scale = np.array([0.9, 1.0])
+    tx = np.array([10.0, -5.0])
+    ty = np.array([-3.0, 7.0])
+    homog = to_homogeneous(op_transform(theta, phi, scale, tx, ty))
+    assert np.allclose(homog @ forward(theta, phi, scale, tx, ty),
+                       np.eye(3)[None], atol=1e-9)
+
+
+def test_zoom_less_than_one_zooms_in():
+    """config.yaml documents scale < 1 as zoom IN: the op must sample closer
+    to the origin, so its linear part has magnitude `scale`, not 1/`scale`."""
+    m = op_transform(np.array([0.0]), np.array([0.0]), np.array([0.5]),
+                     np.array([0.0]), np.array([0.0]))
+    assert np.allclose(to_homogeneous(m)[0, :2, :2], 0.5 * np.eye(2),
+                       atol=1e-12)
+
+
+def test_translation_is_negated_by_the_inversion():
+    tx, ty = 12.0, -4.0
+    m = op_transform(np.array([0.0]), np.array([0.0]), np.array([1.0]),
+                     np.array([tx]), np.array([ty]))
+    assert np.allclose(m[0, [2, 5]], [-tx, -ty], atol=1e-12)
+
+
+def test_inverted_rotation_is_still_a_pure_rotation():
+    """Inversion must not introduce scaling creep into a rotation."""
+    theta = np.deg2rad(37.0)
+    m = op_transform(np.array([theta]), np.zeros(1), np.ones(1),
+                     np.zeros(1), np.zeros(1))
+    lin = to_homogeneous(m)[0, :2, :2]
+    expected = np.linalg.inv(
+        np.array([[np.cos(theta), -np.sin(theta)],
+                  [np.sin(theta), np.cos(theta)]]))
+    assert np.allclose(lin, expected, atol=1e-9)
+    assert np.allclose(lin @ lin.T, np.eye(2), atol=1e-9)
+
+
+@pytest.mark.parametrize("deg", [1.0, 40.0, 90.0, 179.0])
+def test_op_transform_never_produces_nan(deg):
+    m = op_transform(np.array([np.deg2rad(deg)]), np.array([np.deg2rad(20.0)]),
+                     np.array([0.8]), np.array([15.0]), np.array([-15.0]))
+    assert np.isfinite(m).all()

@@ -130,10 +130,14 @@ def test_augmentation_is_in_graph_not_materialised():
 def test_augmentation_uses_single_affine_transform():
     """One fused op is cheaper and safer than many full-size intermediates."""
     text = src(TRAIN)
-    assert "tf.image.affine_transform" in text
+    # `tf.image.affine_transform` is NOT a TensorFlow API — an earlier revision
+    # called it and every Colab augmentation test died with AttributeError.
+    assert "tf.raw_ops.ImageProjectiveTransformV3" in text
+    assert "tf.image.affine_transform" not in code_only(TRAIN), \
+        "tf.image.affine_transform does not exist in TensorFlow"
     # The earlier hand-rolled version used these; they were fragile.
     assert "tf.image.rot90" not in code_only(TRAIN), \
-        "fractional rotation via rot90 is invalid; use affine_transform"
+        "fractional rotation via rot90 is invalid; use the projective op"
     assert "shear_vec" not in code_only(TRAIN), "dead variable from an old draft"
 
 

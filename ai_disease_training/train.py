@@ -71,9 +71,9 @@ def parse_args(argv=None):
 def augment_batches(dataset, cfg: dict, height: int, width: int):
     """Augment on-device, per batch, inside the tf.data graph.
 
-    Implemented as a single `tf.image.affine_transform`, which covers
-    rotation, translation, shear and zoom in one fused op. That keeps the work
-    on the accelerator and avoids materialising extra host-RAM copies.
+    Implemented as a single `tf.raw_ops.ImageProjectiveTransformV3`, which
+    covers rotation, translation, shear and zoom in one fused op. That keeps
+    the work on the accelerator and avoids materialising extra host-RAM copies.
 
     Images stay uint8 in the pipeline and are NOT divided by 255: EfficientNet's
     own stem handles scaling, so rescaling here would break the verified
@@ -147,16 +147,31 @@ def augment_batches(dataset, cfg: dict, height: int, width: int):
                           + rot_m[:, 1, 1] * shear_m[:, 1, 1],
                           tf.zeros_like(theta)], axis=-1),
             ], axis=1)
-            transforms = tf.stack([
-                tf.stack([composed[:, 0, 0], composed[:, 0, 1], tx], axis=-1),
-                tf.stack([composed[:, 1, 0], composed[:, 1, 1], ty], axis=-1),
-            ], axis=1)                                   # (batch, 2, 3)
+            # `composed` maps input coordinates to output coordinates. The op
+            # samples the source instead, so it wants the opposite direction:
+            # a transform mapping output coordinates back to input ones. Fold
+            # zoom into the forward matrix first (dividing by `scale` magnifies,
+            # so once inverted the op receives scale < 1 and zooms IN, which is
+            # what config.yaml documents), then invert the whole homogeneous
+            # matrix. No rotation or shear is lost: only the direction flips.
+            lin = composed[:, :, :2] / scale[:, None, None]
+            fwd = tf.concat([
+                tf.concat([lin, tf.stack([tx, ty], axis=-1)[:, :, None]],
+                          axis=-1),
+                tf.concat([tf.zeros_like(tx)[:, None], tf.zeros_like(ty)[:, None],
+                           tf.ones_like(scale)[:, None]], axis=-1)[:, None, :],
+            ], axis=1)                                   # (batch, 3, 3)
+            inv = tf.linalg.inv(fwd)
+            # Affine flat form [a0, a1, a2, b0, b1, b2, c0, c1]. The homogeneous
+            # row is [0, 0, 1], so its first two entries are exactly c0, c1.
+            transforms = tf.reshape(inv, [-1, 9])[:, :8]  # (batch, 8)
 
-            x = tf.image.affine_transform(
+            x = tf.raw_ops.ImageProjectiveTransformV3(
                 images=x,
                 transforms=transforms,
-                scale=scale,
-                fill_mode="nearest",
+                output_shape=shape[1:3],
+                interpolation="NEAREST",
+                fill_mode="NEAREST",
                 fill_value=0.0,
             )
         x = tf.clip_by_value(x, 0.0, 255.0)
