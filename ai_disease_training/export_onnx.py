@@ -127,10 +127,11 @@ def main(argv=None) -> int:
     print(f"Loaded Keras model: {model_path}")
 
     try:
+        import onnx
         import tf2onnx
     except ImportError:
-        print("FATAL: tf2onnx is required.\n"
-              "  pip install tf2onnx>=1.15.0", file=sys.stderr)
+        print("FATAL: onnx and tf2onnx are required.\n"
+              "  pip install onnx>=1.15.0 tf2onnx>=1.15.0", file=sys.stderr)
         raise SystemExit(2)
 
     target = keras_model
@@ -164,7 +165,8 @@ def main(argv=None) -> int:
         print(f"FATAL: conversion failed: {e}", file=sys.stderr)
         return 4
 
-    tf2onnx.utils.save_model(model_proto, str(onnx_path))
+    # tf2onnx has no save helper; onnx.save is the canonical API.
+    onnx.save(model_proto, str(onnx_path))
     size_mb = onnx_path.stat().st_size / (1024 * 1024)
     print(f"\nSaved ONNX model: {onnx_path}  ({size_mb:.1f} MB)")
 
