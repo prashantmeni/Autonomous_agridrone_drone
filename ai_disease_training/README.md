@@ -20,6 +20,12 @@ deployed (step 6). Do not claim inference works before then.
 > `[0.229,0.224,0.225]`. Real PlantVillage leaf under cropguard + our pipeline:
 > `Tomato___Bacterial_spot` @ 0.941 — correct. Inference mean 146 ms, min 94
 > ms range ~6.5–7 FPS; pipeline total ~156 ms/image.
+> **Drone integration (2026-10-08):** `src/drone/perception/crop_ai.py` now
+> builds the pipeline from `ai_disease_detection/config.yaml` (previously it
+> hard-coded `divide_255`, so cropguard saw wrong-normalized input and scored
+> the same leaf at 0.195/Unknown). Via the live drone API
+> `POST /api/disease/analyze`: `Tomato___Bacterial_spot` @ 0.941, and
+> `GET /api/crop-ai/model` reports `cropguard_int8.onnx` / 38 labels / OK.
 > **Self-trained model: smoke test only (kept as `divide_255` profile).**
 > The `disease_model.onnx` (EfficientNetB0, 15.5 MB) from the 2026-10-08
 > 2-epoch run reached val accuracy 0.7370; NOT the default and not accuracy-competitive
