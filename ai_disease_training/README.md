@@ -15,6 +15,11 @@ deployed (step 6). Do not claim inference works before then.
 > near-duplicate leakage). We have not re-measured this accuracy ourselves; it
 > is their number. Class order matches our `labels.txt` (38/38, index-identical;
 > 3 label strings differ only by underscore/space).
+> **int8 vs fp32 (Pi 4B, 2026-10-08):** same predictions — 12/12 top-1
+> identical on a 12-class ground-truth set, worst per-class probability delta
+> 0.023 (2.3 pp). Speed: int8 154.8 ms/infer (~6.5 FPS) vs fp32 337.7 ms
+> (~3.0 FPS) — int8 is ~2.2&times; faster at a quarter of the file size, so it
+> stays the deployment default.
 > **Verified on the Pi (2026-10-08):** input contract is ImageNet-normalized
 > NCHW float32 `(x/255−mean)/std` with mean `[0.485,0.456,0.406]`, std
 > `[0.229,0.224,0.225]`. Real PlantVillage leaf under cropguard + our pipeline:
