@@ -79,9 +79,10 @@ def test_analyze_pulls_camera_frame_through_adapter(monkeypatch):
     app = FakeApp()
     frame = np.full((64, 64, 3), 120, np.uint8)
 
-    def fake_analyze(f, path, threshold, source="camera"):
+    def fake_analyze(f, path, threshold, source="camera", tiled=None):
         assert f is frame
         assert path == app.cfg.disease_detection.model_path
+        assert tiled is True
         return detection()
 
     monkeypatch.setattr(crop_monitor, "get_services",

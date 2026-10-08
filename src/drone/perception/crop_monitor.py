@@ -51,6 +51,7 @@ class CropAIMonitor:
             self.cfg.model_path,
             self.cfg.confidence_threshold,
             source="camera",
+            tiled=True,
         )
 
     async def _handle(self, result: dict) -> None:

@@ -45,6 +45,21 @@ class InferenceConfig:
 
 
 @dataclass
+class TiledConfig:
+    """Sliding-window scanning for wide aerial frames.
+
+    `tile_size` should match `preprocess.input_size` (the model's smallest
+    readable target). `stride` < `tile_size` overlaps tiles (better recall,
+    more CPU); stride == tile_size gives complete, gapless coverage with no
+    overlap. On a Raspberry Pi 4B a 640x480 frame at stride 224 is ~9 tiles.
+    """
+
+    enabled: bool = False
+    tile_size: int = 224
+    stride: int = 224
+
+
+@dataclass
 class CameraConfig:
     device: int = 0
     width: int = 640
@@ -66,6 +81,7 @@ class Config:
     labels_path: Path = Path("models/labels.txt")
     preprocess: PreprocessConfig = field(default_factory=PreprocessConfig)
     inference: InferenceConfig = field(default_factory=InferenceConfig)
+    tiled: TiledConfig = field(default_factory=TiledConfig)
     camera: CameraConfig = field(default_factory=CameraConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     base_dir: Path = field(default_factory=Path.cwd)
@@ -99,6 +115,7 @@ def load_config(config_path: Path | str | None = None) -> Config:
     model = raw.get("model", {}) or {}
     pre = raw.get("preprocessing", {}) or {}
     inf = raw.get("inference", {}) or {}
+    tiled = raw.get("tiled", {}) or {}
     cam = raw.get("camera", {}) or {}
     log = raw.get("logging", {}) or {}
 
@@ -120,6 +137,11 @@ def load_config(config_path: Path | str | None = None) -> Config:
             healthy_keyword=str(inf.get("healthy_keyword", "healthy")),
             strict_label_count=bool(inf.get("strict_label_count", True)),
             expected_classes=int(model.get("expected_classes", 38)),
+        ),
+        tiled=TiledConfig(
+            enabled=bool(tiled.get("enabled", False)),
+            tile_size=int(tiled.get("tile_size", 224)),
+            stride=int(tiled.get("stride", 224)),
         ),
         camera=CameraConfig(
             device=int(cam.get("device", 0)),

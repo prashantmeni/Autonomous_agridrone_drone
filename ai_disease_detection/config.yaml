@@ -44,6 +44,23 @@ inference:
   # Fail loudly when label count != model output classes. Never guess.
   strict_label_count: true
 
+tiled:
+  # Sliding-window scan for wide/aerial frames: drones capture whole plants or
+  # many leaves, and downscaling one such frame to 224x224 destroys the leaf
+  # signal. When scanning is active, frames larger than tile_size are split
+  # into tiles, each classified, and the best tile reported. Small/leaf-sized
+  # frames always take the single-inference path.
+  #
+  # enabled: true makes /api/disease/analyze as well as the camera monitor scan
+  # wide frames; the in-flight monitor always scans regardless of this switch.
+  # stride == tile_size -> complete gapless coverage, no overlap.
+  # stride <  tile_size -> overlapping tiles: better recall, more CPU.
+  # Raspberry Pi 4B (cropguard int8): a 640x480 frame at tile 224/stride 224
+  # is ~9 tiles, ~1.4 s; at stride 112 it is ~30 tiles, ~4.6 s.
+  enabled: false
+  tile_size: 224
+  stride: 224
+
 camera:
   # OpenCV device index for a USB webcam. CSI cameras need picamera2 instead;
   # see src/camera.py for the abstraction.

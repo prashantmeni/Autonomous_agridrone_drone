@@ -179,11 +179,16 @@ def analyze(frame, model_path, confidence_threshold: float,
             healthy_keyword: str = "healthy", source: str = "camera",
             image_path: str | None = None,
             high_threshold: float = 0.80,
-            medium_threshold: float = 0.50) -> dict:
+            medium_threshold: float = 0.50,
+            tiled: bool | None = None) -> dict:
     """Run the AI module's measured pipeline on one frame.
 
     Returns the AI module's DetectionResult as a dict, so the backend keeps
     publishing the same JSON shape the dashboard already renders.
+
+    `tiled` selects the sliding-window scan for wide/aerial frames; default
+    None defers to the module's `tiled.enabled` setting, keeping still-image
+    uploads single-shot unless scanning is switched on.
     """
     mod = _ai_module()
     if mod is None:
@@ -202,9 +207,15 @@ def analyze(frame, model_path, confidence_threshold: float,
     cfg.inference.healthy_keyword = healthy_keyword
     cfg.skip_image_quality_check = False
 
-    result = mod["pipeline"].run_inference(
-        frame, engine, cfg, source=source, image_path=image_path
-    )
+    use_tiled = cfg.tiled.enabled if tiled is None else bool(tiled)
+    if use_tiled:
+        result = mod["pipeline"].run_inference_tiled(
+            frame, engine, cfg, source=source, image_path=image_path
+        )
+    else:
+        result = mod["pipeline"].run_inference(
+            frame, engine, cfg, source=source, image_path=image_path
+        )
     data = result.to_dict() if hasattr(result, "to_dict") else dict(result)
 
     # The pipeline gates on frame quality and records it under metadata; surface
@@ -213,6 +224,14 @@ def analyze(frame, model_path, confidence_threshold: float,
     quality = (data.get("metadata") or {}).get("quality")
     if quality is not None:
         data["image_quality"] = quality
+
+    # A tiled scan reports the best tile plus the full grid; expose the scan
+    # summary flat so the dashboard can render overlay boxes without parsing
+    # metadata.
+    meta = data.get("metadata") or {}
+    if meta.get("scanned"):
+        data["tile_count"] = int(meta.get("tile_count") or 0)
+        data["tiles"] = meta.get("tiles") or []
 
     reliable = bool(data.get("reliable"))
     confidence = float(data.get("confidence") or 0.0)
