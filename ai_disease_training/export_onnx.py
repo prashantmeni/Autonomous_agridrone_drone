@@ -148,15 +148,16 @@ def main(argv=None) -> int:
     input_signature = [tf.TensorSpec(
         shape=(None, 3, h, w) if export_nchw else (None, h, w, 3),
         dtype=tf.float32, name="input")]
-    output_signature = [tf.TensorSpec(
-        shape=(None, n), dtype=tf.float32, name="output")]
 
+    # tf2onnx.convert.from_keras takes input_signature only; it derives the
+    # outputs from the model graph. (Passing output_signature raises
+    # "got an unexpected keyword argument".) The emitted output shape is
+    # verified below, so a wrong width still fails loudly.
     print(f"\nConverting to ONNX (opset {opset})...")
     try:
         model_proto, _ = tf2onnx.convert.from_keras(
             target,
             input_signature=input_signature,
-            output_signature=output_signature,
             opset=opset,
         )
     except Exception as e:
