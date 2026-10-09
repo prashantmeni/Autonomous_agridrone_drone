@@ -77,6 +77,11 @@ if ! command -v systemctl >/dev/null 2>&1; then
   exit 0
 fi
 
+# agridrone.service writes to logs/drone_prod.log via StandardOutput=append.
+# A fresh clone has no logs/ directory and systemd then fails with
+# status=209/STDOUT, refusing to start the process at all.
+mkdir -p logs data
+
 log "installing systemd units for $REPO_DIR"
 sed -e "s#/home/agridrone123/agridrone#${REPO_DIR}#g" \
     systemd/agridrone.service > /tmp/agridrone.service.new
