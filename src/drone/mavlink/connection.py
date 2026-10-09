@@ -83,7 +83,23 @@ class MavlinkConnection:
         self.connected = False
         self.last_heartbeat = 0.0
         self._cmd_seq = 0
+        self._routers: list[tuple[str, Any]] = []
         self.px4_status: deque = deque(maxlen=20)  # (ts, text) — PX4 STATUSTEXT history
+
+    def register_router(self, msg_type: str, handler) -> None:
+        """Route one MAVLink message type to ``handler(msg)``.
+
+        Routers live on the connection, not the socket, so they survive
+        reconnects. They are invoked from the message hook, which fires on
+        whichever loop pulls the message off the wire — the telemetry and
+        maintain loops drain the link with ``recv_match(blocking=False)`` and
+        discard anything they do not use, so a router is the only reliable way
+        to observe messages like MISSION_CURRENT.
+        """
+        self._routers.append((msg_type, handler))
+
+    def clear_routers(self) -> None:
+        self._routers.clear()
 
     @property
     def resolved_device(self) -> str | None:
@@ -134,7 +150,7 @@ class MavlinkConnection:
                     pass
 
     def _install_status_logger(self):
-        """Permanently log every PX4 STATUSTEXT (prearm denials, estimator warnings...).
+        """Dispatch every received message: STATUSTEXT logging plus routers.
 
         Installed on the raw connection so it fires no matter which loop drains
         the message off the wire, and survives outside command wait windows.
@@ -147,15 +163,23 @@ class MavlinkConnection:
         def hook(*args):
             m = args[-1]  # pymavlink calls hook(self, msg)
             try:
-                if m.get_type() != "STATUSTEXT":
-                    return
-                text = str(m.text).rstrip("\x00")
+                mtype = m.get_type()
             except Exception:
                 return
-            if not text:
-                return
-            self.px4_status.append((time.time(), text))
-            log.warning(f"PX4: {text}")
+            if mtype == "STATUSTEXT":
+                try:
+                    text = str(m.text).rstrip("\x00")
+                except Exception:
+                    text = ""
+                if text:
+                    self.px4_status.append((time.time(), text))
+                    log.warning(f"PX4: {text}")
+            for want, fn in tuple(self._routers):
+                if want == mtype:
+                    try:
+                        fn(m)
+                    except Exception as e:  # noqa: BLE001 - a router must not kill the link
+                        log.warning(f"router for {mtype} failed: {e}")
 
         hooks.append(hook)
 

@@ -493,17 +493,30 @@ def create_app(drone_app) -> FastAPI:
         b = drone_app.db.get_mission(mid)
         if not b: raise HTTPException(404, "not found")
         return b
+    @app.get("/api/missions/active")
+    async def mactive(): return drone_app.missions.status()
     @app.post("/api/missions/{mid}/start")
     async def mstart(mid: str, _=Depends(guard)):
-        from ..autonomy.mission_manager import MissionManager
         b = drone_app.db.get_mission(mid)
         if not b: raise HTTPException(404, "not found")
-        try: return await MissionManager(drone_app).start(mid, b)
-        except Exception as e: raise HTTPException(400, str(e))
+        try:
+            result = await drone_app.missions.start(mid, b)
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+        except Exception as e:
+            raise HTTPException(400, str(e))
+        if result.get("status") == "failed":
+            raise HTTPException(409, result.get("error", "mission failed to start"))
+        return result
+    @app.post("/api/missions/{mid}/pause")
+    async def mpause(mid: str, _=Depends(guard)):
+        return await drone_app.missions.pause()
+    @app.post("/api/missions/{mid}/resume")
+    async def mresume(mid: str, _=Depends(guard)):
+        return await drone_app.missions.resume()
     @app.post("/api/missions/{mid}/abort")
     async def mabort(mid: str, _=Depends(guard)):
-        from ..autonomy.mission_manager import MissionManager
-        return await MissionManager(drone_app).abort(f"abort {mid}")
+        return await drone_app.missions.abort(f"abort {mid}")
 
     @app.post("/api/boundaries")
     async def bcreate(b: BoundaryCreate):
@@ -542,6 +555,19 @@ def create_app(drone_app) -> FastAPI:
     async def dets():
         rows = drone_app.db.con.execute("SELECT crop,disease,conf,lat,lon,ts FROM detections ORDER BY ts DESC LIMIT 100").fetchall()
         return [{"crop": r[0], "disease": r[1], "confidence": r[2], "latitude": r[3], "longitude": r[4], "timestamp": r[5]} for r in rows]
+    @app.post("/api/detections/mark")
+    async def dmark(payload: dict, _=Depends(guard)):
+        """Record a manually confirmed detection (dashboard 'plot disease zone')."""
+        crop = str(payload.get("crop") or "unknown")
+        disease = str(payload.get("disease") or "unclassified")
+        try:
+            conf = float(payload.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "confidence must be a number")
+        lat = float(payload.get("latitude") or 0.0)
+        lon = float(payload.get("longitude") or 0.0)
+        drone_app.db.add_detection(crop, disease, conf, lat, lon)
+        return {"status": "marked", "crop": crop, "disease": disease, "confidence": conf}
 
     @app.get("/api/logs")
     async def logs(level: str = "INFO", limit: int = 100):

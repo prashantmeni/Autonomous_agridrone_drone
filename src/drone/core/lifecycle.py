@@ -5,6 +5,7 @@ from functools import partial
 from ..core.config import AppConfig
 from ..mavlink.connection import MavlinkConnection
 from ..mavlink.telemetry import TelemetryStore
+from ..autonomy.mission_manager import MissionManager
 from ..telemetry.recorder import TelemetryRecorder
 from ..telemetry import publisher as pub
 from ..db.store import Database
@@ -21,12 +22,20 @@ class DroneApp:
         self.tstore = TelemetryStore()
         self.recorder = TelemetryRecorder(cfg.telemetry.log_dir, cfg.telemetry.max_log_mb)
         self.fsm = FlightStateMachine()
+        # One mission manager for the process lifetime. Constructing it per
+        # request (as the API used to) threw away active_id/progress/phase the
+        # moment the response was sent.
+        self.missions = MissionManager(self)
         self._tasks: list[asyncio.Task] = []
 
     async def start(self):
         await asyncio.to_thread(self.conn.connect)
         await asyncio.to_thread(self.conn.wait_heartbeat, 8.0)
-        self._tasks = [asyncio.create_task(self.conn.maintain()), asyncio.create_task(self._telemetry_loop())]
+        self._tasks = [
+            asyncio.create_task(self.conn.maintain()),
+            asyncio.create_task(self._telemetry_loop()),
+            asyncio.create_task(self.missions.run()),
+        ]
         if self.cfg.disease_detection.enabled:
             from ..perception.crop_monitor import CropAIMonitor
             monitor = CropAIMonitor(self)
