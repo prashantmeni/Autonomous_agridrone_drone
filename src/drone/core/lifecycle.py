@@ -6,6 +6,7 @@ from ..core.config import AppConfig
 from ..mavlink.connection import MavlinkConnection
 from ..mavlink.telemetry import TelemetryStore
 from ..autonomy.mission_manager import MissionManager
+from ..safety.failsafe_supervisor import FailsafeSupervisor
 from ..telemetry.recorder import TelemetryRecorder
 from ..telemetry import publisher as pub
 from ..db.store import Database
@@ -26,15 +27,19 @@ class DroneApp:
         # request (as the API used to) threw away active_id/progress/phase the
         # moment the response was sent.
         self.missions = MissionManager(self)
+        self.failsafe = FailsafeSupervisor(self)
         self._tasks: list[asyncio.Task] = []
 
     async def start(self):
         await asyncio.to_thread(self.conn.connect)
         await asyncio.to_thread(self.conn.wait_heartbeat, 8.0)
+        from ..safety import watchdog_runner
         self._tasks = [
             asyncio.create_task(self.conn.maintain()),
             asyncio.create_task(self._telemetry_loop()),
             asyncio.create_task(self.missions.run()),
+            asyncio.create_task(self.failsafe.run()),
+            asyncio.create_task(watchdog_runner.run(self)),
         ]
         if self.cfg.disease_detection.enabled:
             from ..perception.crop_monitor import CropAIMonitor

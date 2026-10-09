@@ -27,6 +27,12 @@ class SafetyConfig(BaseModel):
     min_satellites: int = 8
     max_hdop: float = 1.5
     geofence_margin_m: float = 5.0
+    # When true, arming requires the aircraft to be inside a stored boundary.
+    # Off by default: with no boundary configured it would block every arm.
+    geofence_required: bool = False
+    # Low-battery action thresholds used by the failsafe supervisor.
+    rtl_battery_percent: int = 25
+    land_battery_percent: int = 15
 
 class CameraConfig(BaseModel):
     enabled: bool = True

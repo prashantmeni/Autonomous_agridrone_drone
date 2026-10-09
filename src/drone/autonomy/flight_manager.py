@@ -12,7 +12,9 @@ class FlightManager:
         from ..safety.flight_safety import preflight_check
         report = preflight_check(self.app)
         if not report["ready"]:
-            raise RuntimeError(f"preflight FAIL: {report}")
+            blocking = report.get("blocking") or {}
+            detail = ", ".join(f"{k}={v}" for k, v in blocking.items()) or "unknown"
+            raise RuntimeError(f"preflight not satisfied: {detail}")
         from ..mavlink import commands as C
         fsm = self.app.fsm
         try: fsm.transition(FlightState.ARMING, "takeoff requested")

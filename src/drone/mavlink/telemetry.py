@@ -19,6 +19,17 @@ _SYS_BITS = [
     (0x40000000, "PROPULSION"),
 ]
 
+# MAV_ESTIMATOR_STATUS_FLAGS (common.xml). The arithmetic bits are what make an
+# EKF estimate untrustworthy for position/velocity control; the GPS bits describe
+# the GPS solution rather than the filter itself.
+_EKF_FLAGS = [
+    (0x01, "GPS_GLITCH"), (0x02, "ACCEL_ERROR"), (0x04, "VELOCITY_ERROR"),
+    (0x08, "POS_ERROR"), (0x10, "AZ_ERROR"), (0x20, "OTHER_ERROR"),
+    (0x40, "GPS_RESET"), (0x80, "GPS_DIVERGENCE"), (0x100, "GPS_NOFIX"),
+]
+_EKF_ARITHMETIC_BITS = 0x02 | 0x04 | 0x08 | 0x10 | 0x20
+
+
 @dataclass
 class TelemetrySnapshot:
     connected: bool = False
@@ -44,6 +55,12 @@ class TelemetrySnapshot:
     accel_y: float = 0.0
     accel_z: float = 0.0
     sensor_issues: list = field(default_factory=list)
+    # EKF health from ESTIMATOR_STATUS. ekf_flags is -1 until the FC has sent
+    # the message at least once, which is what lets preflight report UNKNOWN
+    # instead of guessing PASS.
+    ekf_flags: int = -1
+    ekf_vel_ratio: float = 0.0
+    ekf_hpos_ratio: float = 0.0
     # RC / handheld transmitter link (from RC_CHANNELS or SYS_STATUS RC_RECEIVER bit)
     rc_last_seen: float = 0.0
     rc_rssi: int = -1
@@ -58,6 +75,22 @@ class TelemetrySnapshot:
         age = (time.time() - self.rc_last_seen) if self.rc_last_seen else -1.0
         fresh = 0.0 <= age <= self.RC_MAX_AGE_S
         return (fresh or self.rc_receiver_ok), age
+
+    @property
+    def ekf_known(self) -> bool:
+        """False until the FC has reported ESTIMATOR_STATUS at least once."""
+        return self.ekf_flags >= 0
+
+    @property
+    def ekf_issues(self) -> list[str]:
+        if not self.ekf_known:
+            return []
+        return [name for bit, name in _EKF_FLAGS if self.ekf_flags & bit]
+
+    @property
+    def ekf_estimate_ok(self) -> bool:
+        """True only when the estimator reports no arithmetic error flags."""
+        return self.ekf_known and not (self.ekf_flags & _EKF_ARITHMETIC_BITS)
 
     def to_dict(self):
         d = asdict(self)
@@ -133,6 +166,10 @@ class TelemetryStore:
                 s.yaw_deg = degrees(msg.yaw)
             elif t == "HIGHRES_IMU":
                 s.accel_x, s.accel_y, s.accel_z = msg.xacc, msg.yacc, msg.zacc
+            elif t == "ESTIMATOR_STATUS":
+                s.ekf_flags = int(getattr(msg, "flags", 0) or 0)
+                s.ekf_vel_ratio = float(getattr(msg, "vel_ratio", 0.0) or 0.0)
+                s.ekf_hpos_ratio = float(getattr(msg, "hpos_ratio", 0.0) or 0.0)
             elif t in ("SCALED_IMU", "SCALED_IMU2", "RAW_IMU"):
                 g = 9.80665 / 1000.0  # milli-g -> m/s^2
                 s.accel_x, s.accel_y, s.accel_z = msg.xacc * g, msg.yacc * g, msg.zacc * g
