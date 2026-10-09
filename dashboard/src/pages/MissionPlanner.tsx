@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { MapView } from "../map/MapView";
 import { api } from "../services/api";
-import { TelemetryData } from "../types";
+import { MissionStatus, TelemetryData } from "../types";
 import { Upload, Play, CheckCircle, AlertCircle, RefreshCw, Compass, MapPin, Sliders } from "lucide-react";
 
 interface MissionPlannerProps {
@@ -39,6 +39,7 @@ export const MissionPlanner: React.FC<MissionPlannerProps> = ({ telemetry }) => 
   const [savedMissions, setSavedMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [statusMsg, setStatusMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [mission, setMission] = useState<MissionStatus | null>(null);
 
   // Generate survey path automatically on parameter change
   const generateSurvey = async (boundary = activeBoundary) => {
@@ -65,6 +66,11 @@ export const MissionPlanner: React.FC<MissionPlannerProps> = ({ telemetry }) => 
   useEffect(() => {
     generateSurvey();
     api.listMissions().then(setSavedMissions).catch(() => {});
+    // Poll real supervision state rather than assuming a start request worked.
+    const poll = () => api.getActiveMission().then(setMission).catch(() => {});
+    poll();
+    const id = setInterval(poll, 1500);
+    return () => clearInterval(id);
   }, []);
 
   const handleUploadAndSave = async () => {
@@ -87,8 +93,18 @@ export const MissionPlanner: React.FC<MissionPlannerProps> = ({ telemetry }) => 
 
   const handleExecuteMission = async (mid: string) => {
     try {
-      await api.startMission(mid);
-      setStatusMsg({ text: `Autonomous mission #${mid.slice(0, 8)} started! PX4 executing flight.`, type: "success" });
+      const res = await api.startMission(mid);
+      // Report what the companion computer actually achieved, not what we hoped.
+      const phase = res?.status ?? "unknown";
+      if (phase === "executing") {
+        setStatusMsg({
+          text: `Mission uploaded to the flight controller (${res.total} items). PX4 is flying it.`,
+          type: "success",
+        });
+      } else {
+        setStatusMsg({ text: `Mission did not start (${phase}).`, type: "error" });
+      }
+      setMission(await api.getActiveMission());
     } catch (e: any) {
       setStatusMsg({ text: `Could not start mission: ${e.message}`, type: "error" });
     }
@@ -271,6 +287,48 @@ export const MissionPlanner: React.FC<MissionPlannerProps> = ({ telemetry }) => 
             </span>
           </div>
 
+          {mission && (
+            <div
+              data-testid="mission-status"
+              style={{
+                marginBottom: 10,
+                padding: "8px 12px",
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--border-color)",
+                background: "rgba(255, 255, 255, 0.03)",
+                fontSize: "0.78rem"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ color: "var(--text-dim)" }}>Flight controller</span>
+                <strong
+                  style={{
+                    color:
+                      mission.phase === "EXECUTING"
+                        ? "var(--accent-green, #34d399)"
+                        : mission.phase === "FAILED"
+                        ? "#ef4444"
+                        : "var(--text-primary)"
+                  }}
+                >
+                  {mission.phase}
+                </strong>
+              </div>
+              {mission.total > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--text-dim)" }}>Waypoints</span>
+                  <span style={{ fontFamily: "var(--font-mono)" }}>
+                    {mission.done}/{mission.total} reached
+                    {mission.current_seq > 0 ? ` · at #${mission.current_seq}` : ""}
+                  </span>
+                </div>
+              )}
+              {mission.error && (
+                <div style={{ marginTop: 4, color: "#ef4444" }}>{mission.error}</div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 180, overflowY: "auto" }}>
             {savedMissions.length === 0 ? (
               <p style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>No saved missions in database yet.</p>
@@ -297,7 +355,8 @@ export const MissionPlanner: React.FC<MissionPlannerProps> = ({ telemetry }) => 
                   <button
                     className="btn btn-sm btn-primary"
                     onClick={() => handleExecuteMission(m.id)}
-                    title="Upload to PX4 and Fly"
+                    disabled={mission?.active || loading}
+                    title="Upload to the flight controller and fly"
                   >
                     <Play size={12} /> Fly
                   </button>

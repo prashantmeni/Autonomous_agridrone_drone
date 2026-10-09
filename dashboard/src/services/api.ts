@@ -3,6 +3,7 @@ import {
   PreflightReport,
   HealthReport,
   Mission,
+  MissionStatus,
   Boundary,
   Detection,
   LogEntry,
@@ -156,11 +157,18 @@ export const api = {
 
   // Missions & boundaries
   listMissions: () => api.get<Mission[]>("/api/missions"),
+  getActiveMission: () => api.get<MissionStatus>("/api/missions/active"),
+  pauseMission: (id: string) =>
+    api.post<{ status: string; detail?: string }>(`/api/missions/${id}/pause`),
+  resumeMission: (id: string) =>
+    api.post<{ status: string; detail?: string }>(`/api/missions/${id}/resume`),
   createMission: (mission: { name: string; waypoints: any[]; takeoff?: { altitude_m: number } }) =>
     api.post<{ id: string }>("/api/missions", mission),
   getMission: (id: string) => api.get<any>(`/api/missions/${id}`),
   startMission: (id: string) =>
-    api.post<{ mission_id: string; status: string }>(`/api/missions/${id}/start`),
+    api.post<{ mission_id: string; status: string; total?: number; phase?: string }>(
+      `/api/missions/${id}/start`
+    ),
   abortMission: (id: string) =>
     api.post<{ status: string; reason: string }>(`/api/missions/${id}/abort`),
 

@@ -131,6 +131,29 @@ export interface Mission {
   takeoff?: { altitude_m: number };
 }
 
+/** Live mission supervision state reported by the companion computer. */
+export interface MissionStatus {
+  phase:
+    | "IDLE"
+    | "VALIDATING"
+    | "UPLOADING"
+    | "EXECUTING"
+    | "PAUSED"
+    | "ABORTING"
+    | "COMPLETE"
+    | "FAILED";
+  mission_id: string | null;
+  name: string | null;
+  total: number;
+  done: number;
+  current_seq: number;
+  error: string | null;
+  started_at: number | null;
+  finished_at: number | null;
+  active: boolean;
+  elapsed_s: number | null;
+}
+
 export interface Boundary {
   id: string;
   name: string;
