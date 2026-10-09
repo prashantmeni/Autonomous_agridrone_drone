@@ -109,6 +109,18 @@ def create_app(drone_app) -> FastAPI:
     async def preflight():
         from ..safety.flight_safety import preflight_check
         return preflight_check(drone_app)
+    @app.get("/api/safety/failsafe")
+    async def failsafe_status():
+        """Current failsafe assessment from the supervisor loop."""
+        return {
+            "report": drone_app.failsafe.last_report,
+            "battery_pct": getattr(drone_app.tstore.snap, "battery_remaining_pct", -1),
+            "armed": bool(getattr(drone_app.tstore.snap, "armed", False)),
+            "thresholds": {
+                "rtl_battery_percent": drone_app.cfg.safety.rtl_battery_percent,
+                "land_battery_percent": drone_app.cfg.safety.land_battery_percent,
+            },
+        }
 
     @app.get("/api/drone/param")
     async def get_param(name: str):
