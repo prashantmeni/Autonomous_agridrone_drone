@@ -39,8 +39,13 @@ export function useTelemetry() {
       ws.onmessage = (event) => {
         try {
           const parsed = JSON.parse(event.data);
-          if (parsed && parsed.data) {
-            setTelemetry(parsed.data);
+          // /ws/telemetry also carries non-telemetry frames (e.g. the crop
+          // monitor's {"type": "crop_ai"} results). Applying one of those as
+          // telemetry would replace every numeric field with undefined and
+          // crash the views on `.toFixed()`, so match on the message type and
+          // merge over the previous values rather than replacing the object.
+          if (parsed && parsed.type === "telemetry" && parsed.data) {
+            setTelemetry((prev) => ({ ...prev, ...parsed.data }));
             setIsConnected(true);
           }
         } catch {
