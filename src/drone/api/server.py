@@ -483,6 +483,11 @@ def create_app(drone_app) -> FastAPI:
 
     @app.get("/api/missions")
     async def mlist(): return drone_app.db.list_missions()
+    # Must be registered before /api/missions/{mid}: FastAPI matches in
+    # declaration order, so the wildcard route would otherwise swallow
+    # "active" as a mission id and answer 404.
+    @app.get("/api/missions/active")
+    async def mactive(): return drone_app.missions.status()
     @app.post("/api/missions")
     async def mcreate(m: MissionCreate):
         mid = str(uuid.uuid4())
@@ -493,8 +498,6 @@ def create_app(drone_app) -> FastAPI:
         b = drone_app.db.get_mission(mid)
         if not b: raise HTTPException(404, "not found")
         return b
-    @app.get("/api/missions/active")
-    async def mactive(): return drone_app.missions.status()
     @app.post("/api/missions/{mid}/start")
     async def mstart(mid: str, _=Depends(guard)):
         b = drone_app.db.get_mission(mid)
