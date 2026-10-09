@@ -274,6 +274,50 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now drone.service
 ```
 
+`drone.service` and `api.service` assume a system-wide install under
+`/opt/agridrone`. For a checkout with its own virtualenv, use
+`systemd/agridrone.service` instead (edit the two paths to match the account):
+
+```bash
+sudo cp systemd/agridrone.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now agridrone.service
+```
+
+It runs the venv interpreter, logs to `logs/drone_prod.log`, and restarts the
+companion computer 5 s after any exit, so the API, camera stream and crop
+monitor come back by themselves after a crash or reboot.
+
+### Camera backends
+
+`camera.type` selects how frames are captured:
+
+| `type` | Path | Use for |
+| --- | --- | --- |
+| `auto` (default) | OpenCV V4L2, with a raw-Bayer (`GB10`) probe first | USB webcams and V4L2 sensors |
+| `picamera2`, `csi`, `pi` | libcamera via picamera2 | Raspberry Pi CSI modules (OV5647, IMX219) |
+
+Use `picamera2` for a Pi camera module. A CSI sensor exposes `/dev/video0` as a
+raw Bayer/ISP node, and reading that node with OpenCV can stall or abort the
+whole process; libcamera owns buffer negotiation, so the picamera2 backend is
+the reliable one. If picamera2 is missing, the service reports
+`CAMERA_UNAVAILABLE` and keeps running rather than crashing.
+
+picamera2 is an apt package (`python3-picamera2`), not a PyPI dependency, so a
+virtualenv cannot see it by default. `scripts/setup_environment.sh` writes a
+`.pth` file exposing `/usr/lib/python3/dist-packages` to the venv, but only when
+the venv and system interpreters share a major.minor version (otherwise the
+extension modules would fail to load). Verify the camera is enumerated:
+
+```bash
+rpicam-hello --list-cameras   # must list the module
+curl -s localhost:8000/api/camera/status
+```
+
+If no camera is listed after a reboot, power-cycle is not the fix — reseat the
+CSI ribbon cable at both ends; the kernel log will show no `unicam` probe at
+all when the sensor is not enumerated.
+
 ## Pixhawk/PX4 setup
 
 This repository assumes PX4 is responsible for stabilized flight control and failsafe behavior. The Pi does not replace the flight controller.
