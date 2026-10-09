@@ -30,6 +30,15 @@ python3 -m venv .venv || true
 log "installing project + dev dependencies"
 ./.venv/bin/python -m pip install -e ".[dev]"
 
+# The crop-disease inference stack is declared in
+# ai_disease_detection/requirements.txt but is NOT a dependency of the root
+# package, so the install above leaves the Pi without an inference backend and
+# every classification fails at runtime. Install the backend explicitly rather
+# than the whole file: its opencv-python entry would replace the headless build
+# installed above and needs libGL, which a headless Pi does not have.
+log "installing onnxruntime (crop-disease inference backend)"
+./.venv/bin/python -m pip install "onnxruntime>=1.17"
+
 # ------------------------------------------------- CSI camera (picamera2)
 # picamera2 ships as an apt package, so a venv cannot import it. Bridge
 # dist-packages in with a .pth, but only when the venv and system interpreters
