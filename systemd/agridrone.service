@@ -1,0 +1,17 @@
+[Unit]
+Description=AgriDrone companion computer (venv deployment)
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/home/agridrone123/agridrone/.venv/bin/python -m drone.main --config /home/agridrone123/agridrone/config/production.yaml
+WorkingDirectory=/home/agridrone123/agridrone
+Restart=always
+RestartSec=5
+EnvironmentFile=-/home/agridrone123/agridrone/.env
+StandardOutput=append:/home/agridrone123/agridrone/logs/drone_prod.log
+StandardError=append:/home/agridrone123/agridrone/logs/drone_prod.log
+
+[Install]
+WantedBy=multi-user.target
