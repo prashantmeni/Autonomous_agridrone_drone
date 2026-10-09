@@ -1,6 +1,7 @@
 """App lifecycle: wires config, db, mavlink, telemetry loop, api."""
 from __future__ import annotations
 import asyncio, logging
+from functools import partial
 from ..core.config import AppConfig
 from ..mavlink.connection import MavlinkConnection
 from ..mavlink.telemetry import TelemetryStore
@@ -40,7 +41,12 @@ class DroneApp:
         while True:
             try:
                 if self.conn.master is not None:
-                    msg = await asyncio.to_thread(self.conn.master.recv_match, {"blocking": False})
+                    # blocking must be passed as a keyword: recv_match's first
+                    # positional parameter is `type`, so passing a dict here
+                    # asks for messages whose type is a dict, matches nothing,
+                    # and leaves telemetry permanently empty.
+                    msg = await asyncio.to_thread(
+                        partial(self.conn.master.recv_match, blocking=False))
                     if msg is not None:
                         self.tstore.update_from_msg(msg)
                 snap = self.tstore.snap.to_dict()
