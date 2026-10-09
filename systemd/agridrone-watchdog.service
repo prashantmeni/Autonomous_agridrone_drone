@@ -1,0 +1,7 @@
+[Unit]
+Description=AgriDrone API watchdog (restart companion computer if unhealthy)
+After=network.target agridrone.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/agridrone123/agridrone/scripts/api_watchdog.sh
