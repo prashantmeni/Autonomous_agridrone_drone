@@ -1,65 +1,77 @@
-# Flight Modes and State Flow
+# Mission Planning
 
-This page records the project’s high-level operational states as implemented around the Python `DroneApp` and the state machine in `src/drone/core/state.py`.
+Mission planning is implemented in the Python app and exposed through the FastAPI endpoints in `src/drone/api/server.py`.
 
 ## Purpose
 
-The Pi app manages a high-level behavioral flow. This is not a substitute for PX4’s own flight controller state machine; it is a project orchestration layer around the hardware controller.
+This document describes how mission data is created, validated, and started in practice.
 
-## State flow
-
-```mermaid
-stateDiagram-v2
-    [*] --> DISARMED
-    DISARMED --> PRE_FLIGHT_CHECK: startup / health validation
-    PRE_FLIGHT_CHECK --> ARMING: preflight pass
-    ARMING --> TAKEOFF: request accepted
-    TAKEOFF --> MISSION
-    MISSION --> RETURN_HOME: RTL or mission end
-    MISSION --> LANDING: normal landing or precision landing
-    TAKEOFF --> LANDING: abort or emergency landing
-    RETURN_HOME --> LANDING
-    LANDING --> LANDED
-    PRE_FLIGHT_CHECK --> ABORT: failed health or safety gate
-    MISSION --> ABORT: system failsafe or user abort
-    ARMING --> EMERGENCY: critical failure
-    ABORT --> LANDED
-    EMERGENCY --> LANDED
-```
-
-## Operational interpretation
-
-| State | Meaning |
-| --- | --- |
-| DISARMED | Controller is idle or unarmed |
-| PRE_FLIGHT_CHECK | Health checks and system validation |
-| ARMING | The operator requests arming after checks pass |
-| TAKEOFF | The vehicle transitions into climb or launch |
-| MISSION | Survey/mission flow is running |
-| RETURN_HOME | Controlled return to home or safe mode |
-| LANDING | Descent or precision landing flow |
-| ABORT | Mission aborted for safety or invalid state |
-| EMERGENCY | Critical failure mode |
-
-## Actual repo behavior
-
-The app exposes endpoints such as:
+## API endpoints
 
 ```bash
-POST /api/drone/arm
-POST /api/drone/takeoff
-POST /api/drone/rtl
-POST /api/drone/land
+GET /api/missions
+POST /api/missions
+GET /api/missions/{mid}
+POST /api/missions/{mid}/start
+POST /api/missions/{mid}/abort
 ```
 
-Those endpoints are defined in `src/drone/api/server.py` and exercise the app’s higher-level control flow.
+## Example mission creation
 
-## Safety rule
+```bash
+curl -X POST http://localhost:8000/api/missions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "field-scan-01",
+    "waypoints": [
+      {"lat": 12.345, "lon": 98.765, "alt": 15.0},
+      {"lat": 12.351, "lon": 98.770, "alt": 15.0}
+    ],
+    "takeoff": {"altitude_m": 15.0},
+    "survey": {"speed_mps": 4.0}
+  }'
+```
 
-The project’s state machine must not override PX4 failsafes. If the controller reports an unsafe condition, the app should stop or route to safe recovery rather than continue autonomous behavior.
+## Expected response
+
+```json
+{"id": "<uuid>"}
+```
+
+## Mission validation
+
+The configuration file `config/default.yaml` sets mission constraints such as:
+
+```yaml
+mission:
+  max_altitude_m: 30.0
+  max_speed_mps: 8.0
+  default_takeoff_alt_m: 15.0
+```
+
+The app uses these values as operational limits during mission behavior and validation. These are hard constraints for the repository, not marketing placeholders.
+
+## Mission start
+
+```bash
+curl -X POST http://localhost:8000/api/missions/<id>/start
+```
+
+If the mission is not found or the drone is blocked by a safety or health gate, the API responds with an error.
+
+## Failure behavior
+
+Mission execution should fail in a controlled way when:
+
+- the drone is not healthy
+- a preflight check fails
+- MAVLink connection is lost
+- the mission is invalid
+- the safety rules reject the action
 
 ## Related docs
 
-- [mavlink.md](mavlink.md)
+- [flight-modes.md](flight-modes.md)
+- [boundary-mapping.md](boundary-mapping.md)
+- [farm-surveying.md](farm-surveying.md)
 - [safety.md](safety.md)
-- [mission-planning.md](mission-planning.md)

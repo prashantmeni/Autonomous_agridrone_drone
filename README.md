@@ -135,7 +135,6 @@ The project is configured in YAML for hardware and environment settings. See:
 │   ├── telemetry.md
 │   ├── safety.md
 │   ├── troubleshooting.md
-│   └── deployment.md
 ├── firmware/
 │   └── README.md
 ├── scripts/
@@ -585,8 +584,7 @@ The repository includes focused documentation pages under `docs/`:
 - `docs/plant-disease-detection.md` — disease recognition workflow
 - `docs/telemetry.md` — telemetry data and monitoring
 - `docs/safety.md` — safety policies
-- `docs/troubleshooting.md` — troubleshooting
-- `docs/deployment.md` — deployment guidance
+- `docs/troubleshooting.md` — troubleshooting and bench checks
 
 ## Tests and validation
 

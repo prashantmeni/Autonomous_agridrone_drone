@@ -1,42 +1,79 @@
-# Safety
+# Troubleshooting
 
-Safety is a strict design requirement in this repository. The rule is simple and explicit:
-
-`PX4 safety > Pi autonomy > UI state`
+This page focuses on the practical checks that match the project’s scripts and runtime structure.
 
 ## Purpose
 
-This page defines how the project treats health, degraded operation, and flight readiness.
+Use these checks when the app, MAVLink link, or dashboard does not respond as expected.
 
-## Safety hierarchy
+## Basic commands
 
-| Priority | Source | Meaning |
-| --- | --- | --- |
-| 1 | PX4 controller | Real flight safety and failsafes |
-| 2 | Pi app | Mission and health rules |
-| 3 | Dashboard/UI | Monitoring and control surface |
+### MAVLink health
 
-## Required behavior
+```bash
+python3 scripts/check_mavlink.py
+```
 
-- A real health check is required before claiming flight readiness.
-- A missing camera, missing obstacle sensor, or missing model should be reported as degraded or unavailable.
-- The dashboard cannot override PX4 flight safety.
-- If the MAVLink heartbeat is absent, treat the system as not operational.
+### API health
 
-## Example degraded states
+```bash
+curl -sf http://localhost:8000/api/health
+```
 
-- `CAMERA_UNAVAILABLE`
-- `OBSTACLE_SENSOR_UNAVAILABLE`
-- `MODEL_NOT_AVAILABLE`
-- `DEGRADED`
+### Serial device check
 
-## Operational principle
+```bash
+ls -l /dev/ttyACM*
+dmesg | grep ttyACM
+```
 
-The project should prefer safer abort or hold states over continuing autonomous behavior when there is uncertainty.
+### Local service start
+
+```bash
+python -m drone.main --config config/development.yaml
+```
+
+## Common issues
+
+### No heartbeat on MAVLink
+
+Possible causes:
+
+- wrong serial device path
+- wrong baud rate
+- PX4 not running or not connected
+- SITL not running on `udp://127.0.0.1:14540`
+
+### API not responding
+
+Check:
+
+- Python process is running
+- port 8000 is not blocked
+- environment file is valid
+
+### Dashboard is blank or stale
+
+Check:
+
+- backend is reachable
+- websocket endpoint `ws://localhost:8000/ws/telemetry` is available
+- `npm run dev` is running in `dashboard/`
+
+### Mission fails to start
+
+Check:
+
+- the mission ID exists
+- health checks are passing
+- no critical safety gate is active
+- the drone is not in a blocked state
+
+## Safety reminder
+
+Do not continue autonomous operations on uncertain health. If the system cannot verify the link or safety state, stop and investigate.
 
 ## Related docs
 
-- [flight-modes.md](flight-modes.md)
-- [precision-landing.md](precision-landing.md)
-- [obstacle-avoidance.md](obstacle-avoidance.md)
-- [plant-disease-detection.md](plant-disease-detection.md)
+- [mavlink.md](mavlink.md)
+- [safety.md](safety.md)

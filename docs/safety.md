@@ -1,62 +1,42 @@
-# Telemetry
+# Safety
 
-Telemetry is a core part of the project. The drone app records and broadcasts telemetry while it monitors the MAVLink stream and other runtime health data.
+Safety is a strict design requirement in this repository. The rule is simple and explicit:
+
+`PX4 safety > Pi autonomy > UI state`
 
 ## Purpose
 
-This page documents the actual telemetry flow used by the project.
+This page defines how the project treats health, degraded operation, and flight readiness.
 
-## Components
+## Safety hierarchy
 
-The project has telemetry components in `src/drone/telemetry/`:
+| Priority | Source | Meaning |
+| --- | --- | --- |
+| 1 | PX4 controller | Real flight safety and failsafes |
+| 2 | Pi app | Mission and health rules |
+| 3 | Dashboard/UI | Monitoring and control surface |
 
-- `logger.py`
-- `metrics.py`
-- `publisher.py`
-- `recorder.py`
+## Required behavior
 
-The app also has a MAVLink telemetry parser in `src/drone/mavlink/telemetry.py`.
+- A real health check is required before claiming flight readiness.
+- A missing camera, missing obstacle sensor, or missing model should be reported as degraded or unavailable.
+- The dashboard cannot override PX4 flight safety.
+- If the MAVLink heartbeat is absent, treat the system as not operational.
 
-## API endpoints
+## Example degraded states
 
-```bash
-GET /api/drone/status
-GET /api/drone/telemetry
-GET /api/health
-GET /api/logs
-```
+- `CAMERA_UNAVAILABLE`
+- `OBSTACLE_SENSOR_UNAVAILABLE`
+- `MODEL_NOT_AVAILABLE`
+- `DEGRADED`
 
-## Websocket stream
+## Operational principle
 
-```bash
-ws://localhost:8000/ws/telemetry
-```
-
-The websocket server is defined in `src/drone/api/websocket.py`.
-
-## Data flow
-
-```text
-MAVLink messages -> TelemetryStore -> recorder + websocket publisher -> dashboard + API
-```
-
-## Example curl
-
-```bash
-curl http://localhost:8000/api/drone/telemetry
-curl http://localhost:8000/api/health
-```
-
-## Expected output
-
-The API returns JSON telemetry or health data. The health endpoint calls `evaluate()` from `src/drone/mavlink/health.py` and merges the results with the snapshot from `TelemetryStore`.
-
-## Safety note
-
-Telemetry is useful for diagnosis, but it is not the same as flight readiness. The project requires actual health checks and controller connectivity before it should treat the system as operational.
+The project should prefer safer abort or hold states over continuing autonomous behavior when there is uncertainty.
 
 ## Related docs
 
-- [mavlink.md](mavlink.md)
 - [flight-modes.md](flight-modes.md)
-- [troubleshooting.md](troubleshooting.md)
+- [precision-landing.md](precision-landing.md)
+- [obstacle-avoidance.md](obstacle-avoidance.md)
+- [plant-disease-detection.md](plant-disease-detection.md)

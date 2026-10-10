@@ -1,87 +1,69 @@
-# Raspberry Pi Setup
+# Pixhawk Setup (PX4)
 
-This page covers the Raspberry Pi companion-computer setup for the project.
+This page explains the expected Pixhawk/PX4 configuration for the project. The system depends on PX4 for flight-critical control.
 
 ## Purpose
 
-The Pi is responsible for running the Python application, exposing the API, recording telemetry, and coordinating mission logic. The project expects it to be connected to a Pixhawk/PX4 controller over MAVLink.
-
-## Prerequisites
-
-- Raspberry Pi OS (64-bit recommended)
-- Network access for package installation
-- Python 3.11+
-- Git
-- Access to the repo
+Use this file to validate the airframe, telemetry, and failsafe setup before enabling missions or takeoff logic.
 
 ## Step-by-step
 
-### 1. Update the Pi
+### 1. Flash PX4
+
+Use QGroundControl to flash the appropriate PX4 firmware for the selected airframe.
+
+### 2. Calibrate the flight controller
+
+Perform the standard calibration sequence:
+
+- accelerometer
+- compass
+- gyroscope
+- level/ground alignment
+
+### 3. Configure the airframe
+
+Set the vehicle to a quadrotor or the matching airframe used in your test hardware. The project assumes a multicopter configuration.
+
+### 4. Configure failsafes
+
+The project treats PX4 failsafes as authoritative. Examples include:
+
+- low battery behavior
+- return-to-launch actions
+- RC loss behavior
+
+### 5. Connect the telemetry link
+
+Typical serial connection:
 
 ```bash
-sudo apt update
-sudo apt install -y python3.11 python3.11-venv python3-pip git
+dmesg | grep ttyACM
+ls -l /dev/ttyACM*
 ```
 
-### 2. Clone and install the project
-
-```bash
-git clone https://github.com/prashantmeni/Autonomous_agridrone_drone.git
-cd Autonomous_agridrone_drone
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -e ".[dev]"
-```
-
-### 3. Prepare environment variables
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-Recommended settings for a physical Pi:
+If using a direct serial link, the project expects settings similar to:
 
 ```dotenv
 MAVLINK_CONNECTION=/dev/ttyACM0
 MAVLINK_BAUD=115200
-DRONE_CONFIG=config/production.yaml
-API_HOST=0.0.0.0
-API_PORT=8000
 ```
 
-### 4. Verify MAVLink path
+### 6. Verify heartbeat
 
 ```bash
 python3 scripts/check_mavlink.py
 ```
 
-This script checks whether the configured local device or UDP/TCP target exists and whether a MAVLink heartbeat is seen.
+The app requires a healthy MAVLink connection before it should proceed with operational workflows.
 
-### 5. Run the app
+## Safety rule
 
-```bash
-python -m drone.main --config config/production.yaml
-```
-
-### 6. Start via systemd
-
-The repo includes service files in `systemd/`:
-
-```bash
-sudo cp systemd/*.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now drone.service
-```
-
-## Safety note
-
-The Pi should not be treated as a substitute for PX4 flight safety. It is a monitoring and orchestration layer.
+PX4 remains responsible for stabilization, actuator control, and emergency behavior. The Pi only orchestrates inputs and health policy.
 
 ## Related docs
 
-- [installation.md](installation.md)
-- [pixhawk-setup.md](pixhawk-setup.md)
 - [mavlink.md](mavlink.md)
-- [deployment.md](deployment.md)
+- [safety.md](safety.md)
+- [flight-modes.md](flight-modes.md)
+- [troubleshooting.md](troubleshooting.md)

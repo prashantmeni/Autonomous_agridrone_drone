@@ -1,62 +1,56 @@
-# Architecture
+# Hardware
 
-This project follows a simple responsibility split:
-
-- Raspberry Pi runs the Python application and the dashboard-facing API.
-- Pixhawk/PX4 provides stabilization, attitude control, and failsafe behavior.
-- The UI is monitoring and control orchestration, not flight authority.
+This project assumes a Raspberry Pi companion computer paired with a Pixhawk/PX4 flight controller. The Pi runs the Python application and user-facing services; the controller runs the flight stack.
 
 ## Purpose
 
-The architecture is designed for a companion-computer workflow: the Pi decides when to arm, take off, run surveys, and monitor health, while PX4 remains the final authority on actual flight control.
+Use this page to confirm the hardware assumptions before you risk any real system bring-up. The project is not designed to replace the Pixhawk with Pi-only control.
 
-## System layout
+## Recommended hardware
 
-```mermaid
-flowchart TD
-    UI[Dashboard / browser] --> API[FastAPI API on Pi]
-    API --> APP[DroneApp lifecycle + FSM]
-    APP --> MISSION[Autonomy + mission manager]
-    APP --> MAP[Mapping + survey planner]
-    APP --> NAV[Navigation + landing logic]
-    APP --> PERCEPTION[Camera + vision + disease models]
-    APP --> SAFETY[Safety monitors + watchdog]
-    SAFETY --> MAV[MAVLink connection]
-    MAV --> PX4[Pixhawk / PX4 controller]
-    PX4 --> MOTORS[ESCs / motors]
-    PX4 --> SENSORS[GPS + IMU + telemetry]
+| Component | Typical role | Notes |
+| --- | --- | --- |
+| Raspberry Pi 4 or 5 | Companion computer | Runs Python app, API, telemetry, mission logic |
+| Pixhawk-compatible controller | Flight controller | Runs PX4; handles stabilization and failsafes |
+| GPS receiver | Positioning data | Used by PX4 and the Pi for health/mission context |
+| USB camera | Vision input | Optional but relevant to landing and detection workflows |
+| Telemetry link | MAVLink access | Usually `/dev/ttyACM0` or `udp://127.0.0.1:14540` for SITL |
+| Power system | Safe flight power | Must match airframe requirements |
+
+## Physical layout
+
+```text
+USB camera --> Raspberry Pi
+Pixhawk telemetry / serial --> Raspberry Pi
+Raspberry Pi <----> MAVLink <----> Pixhawk
+Pixhawk --> ESCs / motors / sensors
 ```
 
-## Responsibilities
+## Configuration references
 
-| Layer | Responsibility | Authority |
-| --- | --- | --- |
-| Dashboard | Monitor telemetry and send commands | Secondary |
-| Pi app | Mission orchestration, health, telemetry, DB, API | Operational |
-| MAVLink layer | Connect to Pixhawk and fetch telemetry | Communication |
-| PX4 | Stabilization, attitude control, failsafe logic | Authoritative |
+The project uses configuration files in `config/`:
 
-## Actual project modules
+- `config/default.yaml`
+- `config/production.yaml`
+- `config/development.yaml`
+- `config/simulation.yaml`
 
-The main Python components are in `src/drone/`:
+These define the MAVLink connection, telemetry rate, safety thresholds, and feature flags.
 
-- `api/`: FastAPI application and websocket endpoints
-- `autonomy/`: mission, flight, geofence, return-to-home logic
-- `core/`: config, lifecycle, state machine
-- `mavlink/`: MAVLink commands, health, telemetry, parameters
-- `mapping/`: boundaries, survey, coverage planning
-- `navigation/`: GPS, heading, landing utilities
-- `perception/`: camera, obstacle detection, plant disease logic
-- `safety/`: battery, GPS, link, watchdog, emergency checks
-- `telemetry/`: recorder, metrics, publisher
+## Safety note
 
-## Safety rule
+A missing camera, missing obstacle sensor, or unavailable model should not be hidden behind a “ready” claim. Use degraded status reporting instead.
 
-`PX4 safety > Pi autonomy > UI state` is the project policy. The dashboard may report telemetry and mission status, but it is not allowed to override actual flight safety.
+Examples from the project safety model:
+
+- `CAMERA_UNAVAILABLE`
+- `OBSTACLE_SENSOR_UNAVAILABLE`
+- `MODEL_NOT_AVAILABLE`
+- `DEGRADED`
 
 ## Related docs
 
-- [hardware.md](hardware.md)
+- [raspberry-pi-setup.md](raspberry-pi-setup.md)
+- [pixhawk-setup.md](pixhawk-setup.md)
 - [mavlink.md](mavlink.md)
-- [flight-modes.md](flight-modes.md)
 - [safety.md](safety.md)

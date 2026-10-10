@@ -1,44 +1,36 @@
-# Precision Landing
+# Obstacle Avoidance
 
-Precision landing is a feature area in the project that depends on vision and landing behavior. It is enabled in the configuration and should be treated as a real capability requiring validation.
+Obstacle avoidance is a configurable feature in the project. It should be treated as a real implementation area, not as a guarantee of autonomous safety without sensor validation.
 
 ## Purpose
 
-The system can support precision landing by detecting a fiducial or landing marker and adjusting the descent path before touchdown.
+The project can evaluate obstacle distance and modify flight behavior using thresholds from configuration.
 
 ## Configuration
 
 ```yaml
-precision_landing:
+obstacle_avoidance:
   enabled: false
-  marker_type: aruco
-  max_descent_speed_mps: 0.8
-  marker_lost_timeout_s: 2.0
+  warning_distance_m: 5.0
+  critical_distance_m: 2.0
+  emergency_distance_m: 1.0
 ```
 
-In simulation, the config may enable it:
+## Degraded and unavailable behavior
 
-```yaml
-precision_landing:
-  enabled: true
-```
+If no obstacle sensor is connected or the sensor is unavailable, the system must report a degraded or unavailable state and avoid claiming safe autonomous operation.
 
-## Operational behavior
+Examples:
 
-The app expects a landing marker pipeline to provide visual guidance to reduce touchdown error. If the marker is lost, the timeout logic should trigger a safe fallback rather than silently continuing.
+- `OBSTACLE_SENSOR_UNAVAILABLE`
+- `DEGRADED`
 
-## Failure and degraded behavior
+## Safety implications
 
-If the marker is not seen or the camera is unavailable:
-
-- the landing path must degrade gracefully
-- the project should report degraded or unavailable state
-- a fallback to a safer landing or abort may be required
-
-This is consistent with the repository’s safety-first policy.
+When obstacle distance reaches warning thresholds, flight logic should slow down or alter trajectory. At critical thresholds, safety logic should favor abort or avoidance.
 
 ## Related docs
 
-- [obstacle-avoidance.md](obstacle-avoidance.md)
 - [safety.md](safety.md)
 - [flight-modes.md](flight-modes.md)
+- [precision-landing.md](precision-landing.md)

@@ -1,69 +1,70 @@
-# Pixhawk Setup (PX4)
+# MAVLink
 
-This page explains the expected Pixhawk/PX4 configuration for the project. The system depends on PX4 for flight-critical control.
+The project communicates with a Pixhawk/PX4 flight controller through MAVLink. The connection is configured in `config/*.yaml` and can be overridden by environment variables.
 
 ## Purpose
 
-Use this file to validate the airframe, telemetry, and failsafe setup before enabling missions or takeoff logic.
+This document is the authoritative reference for the MAVLink transport used by the project.
 
-## Step-by-step
+## Actual settings in the repo
 
-### 1. Flash PX4
+The default and environment-specific config files show the following patterns:
 
-Use QGroundControl to flash the appropriate PX4 firmware for the selected airframe.
-
-### 2. Calibrate the flight controller
-
-Perform the standard calibration sequence:
-
-- accelerometer
-- compass
-- gyroscope
-- level/ground alignment
-
-### 3. Configure the airframe
-
-Set the vehicle to a quadrotor or the matching airframe used in your test hardware. The project assumes a multicopter configuration.
-
-### 4. Configure failsafes
-
-The project treats PX4 failsafes as authoritative. Examples include:
-
-- low battery behavior
-- return-to-launch actions
-- RC loss behavior
-
-### 5. Connect the telemetry link
-
-Typical serial connection:
-
-```bash
-dmesg | grep ttyACM
-ls -l /dev/ttyACM*
+```yaml
+# config/default.yaml
+mavlink:
+  connection: ${MAVLINK_CONNECTION:/dev/ttyACM0}
+  baud: 115200
+  heartbeat_timeout_s: 5.0
+  reconnect_delay_s: 2.0
 ```
 
-If using a direct serial link, the project expects settings similar to:
+```yaml
+# config/simulation.yaml
+mavlink:
+  connection: udp://127.0.0.1:14540
+  baud: 115200
+```
+
+## Supported connection types
+
+The repo explicitly expects a local serial device in production and a UDP SITL target in simulation:
+
+- Serial: `/dev/ttyACM0`
+- SITL UDP: `udp://127.0.0.1:14540`
+
+## Environment variables
 
 ```dotenv
 MAVLINK_CONNECTION=/dev/ttyACM0
 MAVLINK_BAUD=115200
 ```
 
-### 6. Verify heartbeat
+Or for simulation:
+
+```bash
+export MAVLINK_CONNECTION=udp://127.0.0.1:14540
+export MAVLINK_BAUD=115200
+```
+
+## Runtime verification
 
 ```bash
 python3 scripts/check_mavlink.py
 ```
 
-The app requires a healthy MAVLink connection before it should proceed with operational workflows.
+Expected behavior:
 
-## Safety rule
+- `FOUND /dev/ttyACM0` or `FOUND udp://127.0.0.1:14540`
+- `HEARTBEAT OK` when the link is healthy
+- non-zero exit if the heartbeat does not arrive in time
 
-PX4 remains responsible for stabilization, actuator control, and emergency behavior. The Pi only orchestrates inputs and health policy.
+## Safety note
+
+If MAVLink heartbeat fails, the app cannot confidently treat the drone as operational. Mission execution and takeoff flow should be treated as blocked unless the controller is actually reachable.
 
 ## Related docs
 
-- [mavlink.md](mavlink.md)
-- [safety.md](safety.md)
+- [pixhawk-setup.md](pixhawk-setup.md)
 - [flight-modes.md](flight-modes.md)
-- [troubleshooting.md](troubleshooting.md)
+- [telemetry.md](telemetry.md)

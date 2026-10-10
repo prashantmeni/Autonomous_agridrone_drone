@@ -1,68 +1,44 @@
-# Boundary Mapping
+# Precision Landing
 
-This page explains how the project stores and validates field boundaries for missions and survey planning.
+Precision landing is a feature area in the project that depends on vision and landing behavior. It is enabled in the configuration and should be treated as a real capability requiring validation.
 
 ## Purpose
 
-Boundaries are represented in GeoJSON. The application validates the input and stores it in the database for later mission planning and surveying.
+The system can support precision landing by detecting a fiducial or landing marker and adjusting the descent path before touchdown.
 
-## API
+## Configuration
 
-```bash
-POST /api/boundaries
-POST /api/boundaries/import-kml
+```yaml
+precision_landing:
+  enabled: false
+  marker_type: aruco
+  max_descent_speed_mps: 0.8
+  marker_lost_timeout_s: 2.0
 ```
 
-## Example boundary creation
+In simulation, the config may enable it:
 
-```bash
-curl -X POST http://localhost:8000/api/boundaries \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "name": "field-a",
-    "geojson": {
-      "type": "Polygon",
-      "coordinates": [[
-        [77.0, 12.0],
-        [77.01, 12.0],
-        [77.01, 12.01],
-        [77.0, 12.01],
-        [77.0, 12.0]
-      ]]
-    }
-  }'
+```yaml
+precision_landing:
+  enabled: true
 ```
 
-## Validation behavior
+## Operational behavior
 
-The app calls `validate_geojson(...)` before accepting a boundary. Invalid geometry is rejected with a validation error.
+The app expects a landing marker pipeline to provide visual guidance to reduce touchdown error. If the marker is lost, the timeout logic should trigger a safe fallback rather than silently continuing.
 
-## File samples
+## Failure and degraded behavior
 
-Example boundary and mission files exist in:
+If the marker is not seen or the camera is unavailable:
 
-- `data/boundaries/example.geojson`
-- `data/missions/example.yaml`
+- the landing path must degrade gracefully
+- the project should report degraded or unavailable state
+- a fallback to a safer landing or abort may be required
 
-## KML import
-
-The project supports KML import via:
-
-```bash
-curl -X POST http://localhost:8000/api/boundaries/import-kml \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "name": "field-kml",
-    "kml": "<kml>...</kml>"
-  }'
-```
-
-## Operational note
-
-Boundary data is a planning artifact. It should be validated with actual geofence logic and safety restrictions before autonomous execution.
+This is consistent with the repository’s safety-first policy.
 
 ## Related docs
 
-- [farm-surveying.md](farm-surveying.md)
-- [mission-planning.md](mission-planning.md)
+- [obstacle-avoidance.md](obstacle-avoidance.md)
 - [safety.md](safety.md)
+- [flight-modes.md](flight-modes.md)

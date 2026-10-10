@@ -1,36 +1,51 @@
-# Obstacle Avoidance
+# Plant Disease Detection
 
-Obstacle avoidance is a configurable feature in the project. It should be treated as a real implementation area, not as a guarantee of autonomous safety without sensor validation.
+This project includes logic for crop disease detection, but it is model-dependent and should only be treated as active when the model and sensor input are available.
 
 ## Purpose
 
-The project can evaluate obstacle distance and modify flight behavior using thresholds from configuration.
+The detection layer can classify crops and diseases and store detections with coordinates for later review.
 
 ## Configuration
 
 ```yaml
-obstacle_avoidance:
+disease_detection:
   enabled: false
-  warning_distance_m: 5.0
-  critical_distance_m: 2.0
-  emergency_distance_m: 1.0
+  model_path: ""
+  confidence_threshold: 0.6
+  inference_interval_s: 2.0
 ```
 
-## Degraded and unavailable behavior
+## API endpoint
 
-If no obstacle sensor is connected or the sensor is unavailable, the system must report a degraded or unavailable state and avoid claiming safe autonomous operation.
+```bash
+GET /api/detections
+```
 
-Examples:
+It returns rows such as:
 
-- `OBSTACLE_SENSOR_UNAVAILABLE`
+```json
+[
+  {
+    "crop": "tomato",
+    "disease": "leaf_spot",
+    "confidence": 0.89,
+    "latitude": 12.345,
+    "longitude": 98.765,
+    "timestamp": "2026-10-02T12:00:00"
+  }
+]
+```
+
+## Failure behavior
+
+If no model is loaded or no input is available, the correct behavior is not to pretend the system is ready. The project expects:
+
+- `MODEL_NOT_AVAILABLE`
 - `DEGRADED`
-
-## Safety implications
-
-When obstacle distance reaches warning thresholds, flight logic should slow down or alter trajectory. At critical thresholds, safety logic should favor abort or avoidance.
+- user-visible health warnings
 
 ## Related docs
 
+- [telemetry.md](telemetry.md)
 - [safety.md](safety.md)
-- [flight-modes.md](flight-modes.md)
-- [precision-landing.md](precision-landing.md)

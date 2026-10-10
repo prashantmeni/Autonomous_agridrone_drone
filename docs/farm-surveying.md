@@ -1,77 +1,57 @@
-# Mission Planning
+# Farm Surveying
 
-Mission planning is implemented in the Python app and exposed through the FastAPI endpoints in `src/drone/api/server.py`.
+Farm surveying is the project’s operational workflow for scanning a field boundary and generating a survey path based on the field polygon.
 
 ## Purpose
 
-This document describes how mission data is created, validated, and started in practice.
+This feature is implemented via the survey generation API and the mapping modules in the project.
 
-## API endpoints
+## Survey API
 
 ```bash
-GET /api/missions
-POST /api/missions
-GET /api/missions/{mid}
-POST /api/missions/{mid}/start
-POST /api/missions/{mid}/abort
+POST /api/survey/generate
 ```
 
-## Example mission creation
+This endpoint accepts a boundary GeoJSON structure and returns waypoints or generated coverage paths.
+
+## Example request
 
 ```bash
-curl -X POST http://localhost:8000/api/missions \
+curl -X POST http://localhost:8000/api/survey/generate \
   -H 'Content-Type: application/json' \
   -d '{
-    "name": "field-scan-01",
-    "waypoints": [
-      {"lat": 12.345, "lon": 98.765, "alt": 15.0},
-      {"lat": 12.351, "lon": 98.770, "alt": 15.0}
-    ],
-    "takeoff": {"altitude_m": 15.0},
-    "survey": {"speed_mps": 4.0}
+    "boundary_geojson": {
+      "type": "Polygon",
+      "coordinates": [[
+        [77.0, 12.0],
+        [77.01, 12.0],
+        [77.01, 12.01],
+        [77.0, 12.01],
+        [77.0, 12.0]
+      ]]
+    },
+    "altitude_m": 15.0,
+    "speed_mps": 4.0,
+    "overlap": 0.2
   }'
 ```
 
 ## Expected response
 
-```json
-{"id": "<uuid>"}
-```
+The response includes generated waypoint information and related coverage metadata such as altitude, speed, overlap, and waypoint list.
 
-## Mission validation
+## Project modules involved
 
-The configuration file `config/default.yaml` sets mission constraints such as:
+- `src/drone/mapping/survey_planner.py`
+- `src/drone/mapping/boundary_mapper.py`
+- `src/drone/autonomy/geofence.py`
 
-```yaml
-mission:
-  max_altitude_m: 30.0
-  max_speed_mps: 8.0
-  default_takeoff_alt_m: 15.0
-```
+## Operational note
 
-The app uses these values as operational limits during mission behavior and validation. These are hard constraints for the repository, not marketing placeholders.
-
-## Mission start
-
-```bash
-curl -X POST http://localhost:8000/api/missions/<id>/start
-```
-
-If the mission is not found or the drone is blocked by a safety or health gate, the API responds with an error.
-
-## Failure behavior
-
-Mission execution should fail in a controlled way when:
-
-- the drone is not healthy
-- a preflight check fails
-- MAVLink connection is lost
-- the mission is invalid
-- the safety rules reject the action
+Survey generation is a planning layer, not flight certification. A generated path should still be checked against real health, geofence constraints, and flight safety rules before takeoff.
 
 ## Related docs
 
-- [flight-modes.md](flight-modes.md)
 - [boundary-mapping.md](boundary-mapping.md)
-- [farm-surveying.md](farm-surveying.md)
+- [mission-planning.md](mission-planning.md)
 - [safety.md](safety.md)

@@ -1,26 +1,26 @@
-# Farm Surveying
+# Boundary Mapping
 
-Farm surveying is the project’s operational workflow for scanning a field boundary and generating a survey path based on the field polygon.
+This page explains how the project stores and validates field boundaries for missions and survey planning.
 
 ## Purpose
 
-This feature is implemented via the survey generation API and the mapping modules in the project.
+Boundaries are represented in GeoJSON. The application validates the input and stores it in the database for later mission planning and surveying.
 
-## Survey API
+## API
 
 ```bash
-POST /api/survey/generate
+POST /api/boundaries
+POST /api/boundaries/import-kml
 ```
 
-This endpoint accepts a boundary GeoJSON structure and returns waypoints or generated coverage paths.
-
-## Example request
+## Example boundary creation
 
 ```bash
-curl -X POST http://localhost:8000/api/survey/generate \
+curl -X POST http://localhost:8000/api/boundaries \
   -H 'Content-Type: application/json' \
   -d '{
-    "boundary_geojson": {
+    "name": "field-a",
+    "geojson": {
       "type": "Polygon",
       "coordinates": [[
         [77.0, 12.0],
@@ -29,29 +29,40 @@ curl -X POST http://localhost:8000/api/survey/generate \
         [77.0, 12.01],
         [77.0, 12.0]
       ]]
-    },
-    "altitude_m": 15.0,
-    "speed_mps": 4.0,
-    "overlap": 0.2
+    }
   }'
 ```
 
-## Expected response
+## Validation behavior
 
-The response includes generated waypoint information and related coverage metadata such as altitude, speed, overlap, and waypoint list.
+The app calls `validate_geojson(...)` before accepting a boundary. Invalid geometry is rejected with a validation error.
 
-## Project modules involved
+## File samples
 
-- `src/drone/mapping/survey_planner.py`
-- `src/drone/mapping/boundary_mapper.py`
-- `src/drone/autonomy/geofence.py`
+Example boundary and mission files exist in:
+
+- `data/boundaries/example.geojson`
+- `data/missions/example.yaml`
+
+## KML import
+
+The project supports KML import via:
+
+```bash
+curl -X POST http://localhost:8000/api/boundaries/import-kml \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "field-kml",
+    "kml": "<kml>...</kml>"
+  }'
+```
 
 ## Operational note
 
-Survey generation is a planning layer, not flight certification. A generated path should still be checked against real health, geofence constraints, and flight safety rules before takeoff.
+Boundary data is a planning artifact. It should be validated with actual geofence logic and safety restrictions before autonomous execution.
 
 ## Related docs
 
-- [boundary-mapping.md](boundary-mapping.md)
+- [farm-surveying.md](farm-surveying.md)
 - [mission-planning.md](mission-planning.md)
 - [safety.md](safety.md)

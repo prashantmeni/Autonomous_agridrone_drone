@@ -1,56 +1,82 @@
-# Hardware
+# Installation
 
-This project assumes a Raspberry Pi companion computer paired with a Pixhawk/PX4 flight controller. The Pi runs the Python application and user-facing services; the controller runs the flight stack.
+This page describes how to install the project and run the Python service locally.
 
 ## Purpose
 
-Use this page to confirm the hardware assumptions before you risk any real system bring-up. The project is not designed to replace the Pixhawk with Pi-only control.
+Use these steps before you start the app, bring up the dashboard, or test MAVLink connectivity.
 
-## Recommended hardware
+## Prerequisites
 
-| Component | Typical role | Notes |
-| --- | --- | --- |
-| Raspberry Pi 4 or 5 | Companion computer | Runs Python app, API, telemetry, mission logic |
-| Pixhawk-compatible controller | Flight controller | Runs PX4; handles stabilization and failsafes |
-| GPS receiver | Positioning data | Used by PX4 and the Pi for health/mission context |
-| USB camera | Vision input | Optional but relevant to landing and detection workflows |
-| Telemetry link | MAVLink access | Usually `/dev/ttyACM0` or `udp://127.0.0.1:14540` for SITL |
-| Power system | Safe flight power | Must match airframe requirements |
+- Python 3.11+
+- Git
+- Optional: Node.js and npm for the dashboard
+- Optional: Pixhawk hardware or PX4 SITL
 
-## Physical layout
+## Install steps
 
-```text
-USB camera --> Raspberry Pi
-Pixhawk telemetry / serial --> Raspberry Pi
-Raspberry Pi <----> MAVLink <----> Pixhawk
-Pixhawk --> ESCs / motors / sensors
+From the repository root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -e ".[dev]"
 ```
 
-## Configuration references
+The package is defined in `pyproject.toml` and includes the app dependencies and dev tooling.
 
-The project uses configuration files in `config/`:
+## Project dependencies
 
-- `config/default.yaml`
-- `config/production.yaml`
-- `config/development.yaml`
-- `config/simulation.yaml`
+The Python dependencies in `pyproject.toml` include:
 
-These define the MAVLink connection, telemetry rate, safety thresholds, and feature flags.
+- `fastapi`
+- `uvicorn[standard]`
+- `pydantic` and `pydantic-settings`
+- `pyyaml`
+- `pymavlink`
+- `numpy`
+- `shapely`
+- `pyserial`
+- `psutil`
+- `websockets`
+- `opencv-python-headless`
 
-## Safety note
+## Dashboard install
 
-A missing camera, missing obstacle sensor, or unavailable model should not be hidden behind a “ready” claim. Use degraded status reporting instead.
+For the frontend dashboard in `dashboard/`:
 
-Examples from the project safety model:
+```bash
+cd dashboard
+npm install
+npm run dev
+```
 
-- `CAMERA_UNAVAILABLE`
-- `OBSTACLE_SENSOR_UNAVAILABLE`
-- `MODEL_NOT_AVAILABLE`
-- `DEGRADED`
+## Environment setup
+
+```bash
+cp .env.example .env
+```
+
+Then review the values in `.env`, especially:
+
+```dotenv
+MAVLINK_CONNECTION=/dev/ttyACM0
+MAVLINK_BAUD=115200
+API_PORT=8000
+DRONE_CONFIG=config/production.yaml
+```
+
+## Validate install
+
+```bash
+python -m drone.main --config config/development.yaml
+```
+
+This should start the app with the development configuration. If you are in a hardware-less environment, use SITL instead.
 
 ## Related docs
 
 - [raspberry-pi-setup.md](raspberry-pi-setup.md)
-- [pixhawk-setup.md](pixhawk-setup.md)
 - [mavlink.md](mavlink.md)
-- [safety.md](safety.md)
+- [troubleshooting.md](troubleshooting.md)
