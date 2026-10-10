@@ -6,6 +6,7 @@ from ..core.config import AppConfig
 from ..mavlink.connection import MavlinkConnection
 from ..mavlink.telemetry import TelemetryStore
 from ..autonomy.mission_manager import MissionManager
+from ..autonomy.modes import ModeController
 from ..safety.failsafe_supervisor import FailsafeSupervisor
 from ..telemetry.recorder import TelemetryRecorder
 from ..telemetry import publisher as pub
@@ -28,6 +29,7 @@ class DroneApp:
         # moment the response was sent.
         self.missions = MissionManager(self)
         self.failsafe = FailsafeSupervisor(self)
+        self.modes = ModeController(self)
         self._tasks: list[asyncio.Task] = []
 
     async def start(self):

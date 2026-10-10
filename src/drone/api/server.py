@@ -290,6 +290,31 @@ def create_app(drone_app) -> FastAPI:
         drone_app.db.log_event("INFO", "api", "MODE_SET", {"mode": mode})
         return {"mode": mode}
 
+    # --------------------------------------------------- farm flight modes
+    @app.get("/api/modes")
+    async def list_modes(): return drone_app.modes.status()
+    @app.post("/api/modes/{mode}")
+    async def enter_mode(mode: str, payload: dict | None = None, _=Depends(guard)):
+        """Enter a farm flight mode (SURVEY, MONITOR, MAPPING, RTL).
+
+        These wrap the raw PX4 mode change with the sequencing the mode needs:
+        RTL altitude is pushed to the flight controller first and the vehicle is
+        taken to its working altitude.
+        """
+        payload = payload or {}
+        try:
+            result = await drone_app.modes.enter(mode, payload.get("altitude_m"))
+        except ValueError as e:
+            raise HTTPException(404, str(e))
+        except Exception as e:
+            raise HTTPException(500, str(e))
+        if result.get("status") == "rejected":
+            raise HTTPException(409, result.get("error", "mode rejected"))
+        if result.get("status") == "failed":
+            raise HTTPException(502, result.get("error", "flight controller refused"))
+        drone_app.db.log_event("INFO", "api", "MODE_ENTER", result)
+        return result
+
     # ---------------------------------------------------------------- behaviour
     @app.get("/api/behaviour")
     async def get_behaviour():

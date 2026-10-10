@@ -6,7 +6,7 @@ log = logging.getLogger("drone.mavlink.cmd")
 _ACK_RESULT = {0: "ACCEPTED", 1: "TEMPORARILY_REJECTED", 2: "DENIED",
                3: "UNSUPPORTED", 4: "FAILED", 5: "IN_PROGRESS", 6: "CANCELLED"}
 
-def wait_for(conn, want_type: str, predicate, timeout: float = 5.0):
+def wait_for(conn, want_type: str, predicate, timeout: float = 5.0, send=None):
     """Wait for a specific MAVLink message without racing the pollers.
 
     The telemetry and maintain loops drain the link continuously with
@@ -14,6 +14,12 @@ def wait_for(conn, want_type: str, predicate, timeout: float = 5.0):
     blocking recv wait would almost never see its ACK. pymavlink message
     hooks fire from whichever thread pulls the message off the wire, so
     nothing is lost. Returns (message, last_statustext_seen, timed_out).
+
+    ``send`` is invoked *after* the hook is installed and before the wait, so a
+    reply that arrives immediately is still caught. Sending before installing
+    the hook is a real race: a flight controller that answers in a few
+    milliseconds would have its reply discarded, and the caller would report a
+    timeout for a command that actually succeeded.
     """
     master = conn.master
     if master is None:
@@ -44,6 +50,12 @@ def wait_for(conn, want_type: str, predicate, timeout: float = 5.0):
         return None, None, True
     hooks.append(hook)
     try:
+        if send is not None:
+            try:
+                send()
+            except Exception as e:  # noqa: BLE001
+                log.error("wait_for: send failed: %s", e)
+                return None, None, True
         done.wait(timeout)
     finally:
         try:
@@ -67,9 +79,12 @@ def _cmd(conn, command: int, p1=0, p2=0, p3=0, p4=0, p5=0, p6=0, p7=0, timeout=5
         log.error("command rejected: MAVLink not connected")
         return False, "MAVLink not connected"
     t0 = time.time()
-    conn.master.mav.command_long_send(conn.target_system, conn.target_component,
-        command, 0, p1, p2, p3, p4, p5, p6, p7)
-    ack, text, _ = wait_for(conn, "COMMAND_ACK", lambda m: m.command == command, timeout)
+    # The send happens inside wait_for so the ACK hook is already listening.
+    ack, text, _ = wait_for(
+        conn, "COMMAND_ACK", lambda m: m.command == command, timeout,
+        send=lambda: conn.master.mav.command_long_send(
+            conn.target_system, conn.target_component,
+            command, 0, p1, p2, p3, p4, p5, p6, p7))
     if ack is None:
         detail = f"no ACK from autopilot in {timeout:.0f}s"
         if text:
