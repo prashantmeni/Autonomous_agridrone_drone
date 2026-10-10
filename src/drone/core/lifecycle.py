@@ -7,6 +7,7 @@ from ..mavlink.connection import MavlinkConnection
 from ..mavlink.telemetry import TelemetryStore
 from ..autonomy.mission_manager import MissionManager
 from ..autonomy.modes import ModeController
+from ..perception.avoidance import AvoidanceSupervisor
 from ..safety.failsafe_supervisor import FailsafeSupervisor
 from ..telemetry.recorder import TelemetryRecorder
 from ..telemetry import publisher as pub
@@ -30,6 +31,8 @@ class DroneApp:
         self.missions = MissionManager(self)
         self.failsafe = FailsafeSupervisor(self)
         self.modes = ModeController(self)
+        self.avoidance = AvoidanceSupervisor(self)
+        self.hazards = None
         self._tasks: list[asyncio.Task] = []
 
     async def start(self):
@@ -41,8 +44,14 @@ class DroneApp:
             asyncio.create_task(self._telemetry_loop()),
             asyncio.create_task(self.missions.run()),
             asyncio.create_task(self.failsafe.run()),
+            asyncio.create_task(self.avoidance.run()),
             asyncio.create_task(watchdog_runner.run(self)),
         ]
+        if self.cfg.obstacle_avoidance.camera_hazard_detection:
+            from ..perception.hazard_detection import HazardMonitor
+            self.hazards = HazardMonitor(
+                self, interval_s=self.cfg.obstacle_avoidance.camera_hazard_interval_s)
+            self._tasks.append(asyncio.create_task(self.hazards.run()))
         if self.cfg.disease_detection.enabled:
             from ..perception.crop_monitor import CropAIMonitor
             monitor = CropAIMonitor(self)

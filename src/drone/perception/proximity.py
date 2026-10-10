@@ -62,10 +62,48 @@ class ProximityRig:
             critical=cfg.critical_distance_m,
             emergency=cfg.emergency_distance_m,
         )
-        self.sensors: dict[str, SerialRangeSensor | None] = {d: None for d in DIRECTIONS}
+        self.sensors: dict[str, object | None] = {d: None for d in DIRECTIONS}
+
+        # Preferred: explicit per-direction sensor definitions in the config.
+        for direction, spec in (getattr(cfg, "sensors", None) or {}).items():
+            if direction not in self.sensors or not isinstance(spec, dict):
+                continue
+            sensor = self._build_sensor(spec, direction)
+            if sensor is not None:
+                self.sensors[direction] = sensor
+
+        # Legacy: a plain {direction: "/dev/ttyX"} map.
         for direction, port in (sensor_ports or {}).items():
-            if direction in self.sensors and port:
+            if direction in self.sensors and port and self.sensors[direction] is None:
                 self.sensors[direction] = SerialRangeSensor(str(port))
+
+    def _build_sensor(self, spec: dict, direction: str):
+        kind = str(spec.get("type", "serial")).lower()
+        try:
+            if kind in ("ultrasonic", "hcsr04", "hc-sr04"):
+                from ..perception.ultrasonic import HcSr04
+                trig = int(spec["trig_pin"])
+                echo = int(spec["echo_pin"])
+                return HcSr04(trig, echo, name=f"ultrasonic-{direction}",
+                              samples=int(spec.get("samples", 3)))
+            if kind == "simulated":
+                # Bench/simulation mode: exercises the whole avoidance path on a
+                # bench where no sensor is fitted.
+                from ..perception.ultrasonic import HcSr04, SimulatedUltrasonic
+                return HcSr04(int(spec.get("trig_pin", 23)),
+                              int(spec.get("echo_pin", 24)),
+                              backend=SimulatedUltrasonic(
+                                  float(spec.get("distance_m", 5.0))),
+                              samples=int(spec.get("samples", 3)),
+                              name=f"simulated-{direction}")
+            if kind == "serial":
+                port = spec.get("port")
+                if port:
+                    return SerialRangeSensor(str(port), int(spec.get("baud", 115200)))
+            log.warning("unknown sensor type %r for %s", kind, direction)
+        except Exception as e:  # noqa: BLE001 - a missing sensor must not crash startup
+            log.warning("sensor %s (%s) unavailable: %s", direction, kind, e)
+        return None
 
     def _distance(self, direction: str, snap) -> float | None:
         if direction == "down":
@@ -75,7 +113,11 @@ class ProximityRig:
         sensor = self.sensors.get(direction)
         if sensor is None:
             return None
-        return sensor.get_distance_m()
+        try:
+            return sensor.get_distance_m()
+        except Exception as e:  # noqa: BLE001
+            log.debug("sensor %s read failed: %s", direction, e)
+            return None
 
     def status(self, snap) -> dict:
         distances = {d: self._distance(d, snap) for d in DIRECTIONS}

@@ -33,6 +33,9 @@ def get_services(app) -> Services:
     svc = getattr(app, "_services", None)
     if svc is None:
         cfg = app.cfg
+        # Rangefinders come from config (obstacle_avoidance.sensors). This used
+        # to be a hardcoded empty dict, which made every distance-sensing driver
+        # in the repo unreachable no matter what hardware was fitted.
         sensor_ports = {}
         try:
             from .core.behaviour import load_behaviour

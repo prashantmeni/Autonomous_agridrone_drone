@@ -49,6 +49,17 @@ class ObstacleConfig(BaseModel):
     warning_distance_m: float = 5.0
     critical_distance_m: float = 2.0
     emergency_distance_m: float = 1.0
+    # Rangefinder wiring. ``sensors`` maps a direction to its device, e.g.
+    #   sensors: {front: {type: ultrasonic, trig_pin: 23, echo_pin: 24}}
+    # Serial devices use {type: serial, port: /dev/ttyAMA0}. An empty map means
+    # no rangefinder is fitted, which is reported honestly rather than guessed.
+    sensors: dict[str, dict] = Field(default_factory=dict)
+    # Forward-camera hazard detection (people/vehicles ahead). Reports and alerts
+    # only; it never commands the aircraft.
+    camera_hazard_detection: bool = False
+    camera_hazard_interval_s: float = 1.0
+    # Companion-side braking: hold when clearance drops below this distance.
+    brake_enabled: bool = True
 
 class LandingConfig(BaseModel):
     enabled: bool = False
