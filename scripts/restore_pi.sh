@@ -24,7 +24,15 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 # --------------------------------------------------------------- python env
 log "creating virtualenv (.venv)"
-python3 -m venv .venv || true
+if ! python3 -m venv .venv 2>/dev/null; then
+    # Fresh Raspberry Pi OS images ship without venv support; without this the
+    # failure surfaces later as a confusing "No such file or directory" when
+    # the venv interpreter is missing.
+    log "python3-venv is missing; install it with:"
+    log "  sudo apt-get update && sudo apt-get install -y python3-venv"
+    exit 1
+fi
+[ -x .venv/bin/python ] || { log "venv creation failed"; exit 1; }
 ./.venv/bin/python -m pip install --upgrade pip >/dev/null
 
 log "installing project + dev dependencies"
