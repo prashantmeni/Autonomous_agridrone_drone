@@ -12,6 +12,7 @@ import { FlightHealth } from "./pages/FlightHealth";
 import { Logs } from "./pages/Logs";
 import { useTelemetry } from "./hooks/useTelemetry";
 import { usePolling } from "./hooks/usePolling";
+import { SafetyBanner } from "./components/SafetyBanner";
 import { api } from "./services/api";
 
 const VALID_VIEWS: ViewId[] = ["drone", "live", "survey", "crop", "health", "logs"];
@@ -140,6 +141,7 @@ export default function App() {
           charging={charging}
           onEmergency={() => setEmergencyOpen(true)}
         />
+        <SafetyBanner />
 
         <main className="app-content">
           {view === "drone" && (

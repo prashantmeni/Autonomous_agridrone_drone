@@ -33,6 +33,8 @@ export interface PreflightReport {
   ready: boolean;
   checks?: Record<string, string>;
   issues: string[];
+  /** Checks that are not PASS on the critical set, keyed by name. */
+  blocking?: Record<string, string>;
   [key: string]: any;
 }
 
@@ -152,6 +154,57 @@ export interface MissionStatus {
   finished_at: number | null;
   active: boolean;
   elapsed_s: number | null;
+}
+
+/** Farm flight modes offered by the companion computer. */
+export interface ModesStatus {
+  current: string;
+  armed: boolean;
+  survey_altitude_m: number;
+  cruise_speed_mps: number;
+  rth_altitude_m: number;
+  rth_battery_reserve_pct: number;
+  obstacle_brake_distance_m: number;
+  available: string[];
+}
+
+export interface ModeResult {
+  status: string;
+  mode: string;
+  px4_mode?: string;
+  altitude_m?: number;
+  error?: string;
+  applied?: { [key: string]: unknown }[];
+}
+
+/** In-flight failsafe assessment. */
+export interface FailsafeReport {
+  airborne: boolean;
+  armed: boolean;
+  battery_pct: number;
+  connected: boolean;
+  gps_fix: number;
+  ekf_ok: boolean;
+  ekf_issues: string[];
+  advice: string[];
+}
+
+export interface FailsafeStatus {
+  report: FailsafeReport | null;
+  battery_pct: number;
+  armed: boolean;
+  thresholds: { rtl_battery_percent: number; land_battery_percent: number };
+}
+
+/** Forward-camera hazard result (reporting only, never a control input). */
+export interface HazardInfo {
+  hazard: boolean;
+  clear?: boolean;
+  kind?: string | null;
+  confidence?: number;
+  box?: number[] | null;
+  motion?: number;
+  reason?: string;
 }
 
 export interface Boundary {

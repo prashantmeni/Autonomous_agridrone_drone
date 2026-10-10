@@ -4,6 +4,10 @@ import {
   HealthReport,
   Mission,
   MissionStatus,
+  ModesStatus,
+  ModeResult,
+  FailsafeStatus,
+  HazardInfo,
   Boundary,
   Detection,
   LogEntry,
@@ -162,6 +166,12 @@ export const api = {
     api.post<{ status: string; detail?: string }>(`/api/missions/${id}/pause`),
   resumeMission: (id: string) =>
     api.post<{ status: string; detail?: string }>(`/api/missions/${id}/resume`),
+  // Farm flight modes (SURVEY / MONITOR / MAPPING / RTL).
+  getModes: () => api.get<ModesStatus>("/api/modes"),
+  enterMode: (mode: string, altitude_m?: number) =>
+    api.post<ModeResult>(`/api/modes/${mode}`, { altitude_m }),
+  // In-flight failsafe assessment.
+  getFailsafe: () => api.get<FailsafeStatus>("/api/safety/failsafe"),
   createMission: (mission: { name: string; waypoints: any[]; takeoff?: { altitude_m: number } }) =>
     api.post<{ id: string }>("/api/missions", mission),
   getMission: (id: string) => api.get<any>(`/api/missions/${id}`),

@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from "react";
 import { api } from "../services/api";
-import { PreflightReport, TelemetryData } from "../types";
+import { PreflightReport, FailsafeStatus, TelemetryData } from "../types";
 import { ShieldCheck, ShieldAlert, Cpu, HardDrive, Thermometer, Satellite, Radio, Battery, RefreshCw, Wifi, Zap } from "lucide-react";
 
 interface FlightHealthProps {
@@ -18,19 +18,22 @@ interface HealthCard {
 }
 
 export const FlightHealth: React.FC<FlightHealthProps> = ({ telemetry }) => {
-  const [report, setReport] = useState<PreflightReport | null>(null);
+const [report, setReport] = useState<PreflightReport | null>(null);
   const [healthData, setHealthData] = useState<any>(null);
+  const [failsafe, setFailsafe] = useState<FailsafeStatus | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   const fetchChecks = async () => {
     setLoading(true);
     try {
-      const [preflight, health] = await Promise.all([
+      const [preflight, health, fs] = await Promise.all([
         api.getPreflight().catch(() => null),
         api.getHealth().catch(() => null),
+        api.getFailsafe().catch(() => null),
       ]);
       if (preflight) setReport(preflight);
       if (health) setHealthData(health);
+      if (fs) setFailsafe(fs);
     } finally {
       setLoading(false);
     }
@@ -204,6 +207,83 @@ export const FlightHealth: React.FC<FlightHealthProps> = ({ telemetry }) => {
             {isGo ? "✓ CLEARED" : "⚠ HOLD"}
           </span>
         </div>
+
+        {report?.checks && (
+          <div style={{ marginTop: 14, borderTop: "1px solid var(--border-color)", paddingTop: 12 }}>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", fontWeight: 700, textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.05em" }}>
+              Preflight checks
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 6 }}>
+              {Object.entries(report.checks).map(([key, value]) => {
+                const color =
+                  value === "PASS" ? "#34d399"
+                  : value === "FAIL" ? "#f87171"
+                  : value === "WARNING" ? "#fbbf24"
+                  : "var(--text-dim)";
+                return (
+                  <div
+                    key={key}
+                    style={{
+                      display: "flex", justifyContent: "space-between", gap: 8,
+                      padding: "4px 8px", borderRadius: "var(--radius-sm)",
+                      border: "1px solid var(--border-color)", fontSize: "0.72rem",
+                    }}
+                  >
+                    <span style={{ color: "var(--text-dim)" }}>{key.replace(/_/g, " ")}</span>
+                    <b style={{ color, fontFamily: "var(--font-mono)", fontSize: "0.68rem" }}>
+                      {value}
+                    </b>
+                  </div>
+                );
+              })}
+            </div>
+            {report.blocking && Object.keys(report.blocking).length > 0 && (
+              <p style={{ fontSize: "0.72rem", color: "#fbbf24", marginTop: 8 }}>
+                Blocking: {Object.entries(report.blocking).map(([k, v]) => `${k}=${v}`).join(", ")}
+              </p>
+            )}
+          </div>
+        )}
+
+        {failsafe?.report && (
+          <div style={{ marginTop: 14, borderTop: "1px solid var(--border-color)", paddingTop: 12 }}>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", fontWeight: 700, textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.05em" }}>
+              In-flight failsafe supervisor
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <span className="badge" style={{ fontSize: "0.7rem" }}>
+                battery {failsafe.report.battery_pct >= 0 ? `${failsafe.report.battery_pct}%` : "unknown"}
+              </span>
+              <span className="badge" style={{ fontSize: "0.7rem" }}>
+                {failsafe.report.airborne ? "AIRBORNE" : "GROUNDED"}
+              </span>
+              <span className="badge" style={{ fontSize: "0.7rem" }}>
+                EKF {failsafe.report.ekf_ok ? "OK" : failsafe.report.ekf_issues?.length ? failsafe.report.ekf_issues.join(",") : "unknown"}
+              </span>
+              <span className="badge" style={{ fontSize: "0.7rem" }}>
+                RTL &lt; {failsafe.thresholds.rtl_battery_percent}% · LAND &lt; {failsafe.thresholds.land_battery_percent}%
+              </span>
+            </div>
+            {failsafe.report.advice.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                {failsafe.report.advice.map((a) => (
+                  <span
+                    key={a}
+                    className="badge"
+                    style={{
+                      fontSize: "0.68rem",
+                      background: "rgba(251, 191, 36, 0.12)",
+                      color: "#fbbf24",
+                      border: "1px solid rgba(251, 191, 36, 0.3)",
+                    }}
+                  >
+                    {a.replace(/_/g, " ")}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {report?.issues && report.issues.length > 0 && (
           <div style={{ marginTop: 14, borderTop: "1px solid var(--border-color)", paddingTop: 12 }}>

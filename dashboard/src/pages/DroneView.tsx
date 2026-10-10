@@ -2,6 +2,7 @@ import React, { useCallback, useRef } from "react";
 import { Drone3D } from "../components/Drone3D";
 import { CommandBar } from "../components/CommandBar";
 import { ObstaclePanel } from "../components/ObstaclePanel";
+import { FlightModesCard } from "../components/FlightModesCard";
 import { MapView } from "../map/MapView";
 import { TelemetryData, ChargingStatus, ObstacleStatus, Detection } from "../types";
 import { api } from "../services/api";
@@ -298,6 +299,9 @@ export const DroneView: React.FC<DroneViewProps> = ({
         <div className="side-map">
           <MapView telemetry={t} detections={detections} />
         </div>
+
+        {/* farm flight modes (SURVEY / MONITOR / MAPPING / RTL) */}
+        <FlightModesCard notify={notify} />
 
         {/* obstacles (moved from Live page) */}
         <ObstaclePanel obstacles={obstacles} unreachable={obstaclesUnreachable} />
