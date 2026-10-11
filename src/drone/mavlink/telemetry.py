@@ -1,7 +1,28 @@
 """Cached telemetry snapshot parsed from MAVLink messages."""
 from __future__ import annotations
+import math
 import time
 from dataclasses import dataclass, field, asdict
+
+
+def _finite(value, default=0.0):
+    """Coerce a possibly-missing/NaN/inf telemetry value to a JSON-safe float.
+
+    PX4 uses NaN and sentinel values (65535, UINT16_MAX) for "unknown" — GPS
+    dilution, heading before a fix, and several attitude fields. Passing those
+    straight into the snapshot makes FastAPI raise
+    "Out of range float values are not JSON compliant", which turns the whole
+    API into a 500 the moment the flight controller connects.
+    """
+    if value is None:
+        return default
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return default
+    if math.isnan(f) or math.isinf(f):
+        return default
+    return f
 
 # MAV_SYS_STATUS_SENSOR bits (mavlink common.xml — official values)
 _SYS_BITS = [
@@ -121,15 +142,17 @@ class TelemetryStore:
                     modes = {4: "GUIDED", 3: "AUTO", 5: "LOITER", 6: "RTL", 9: "LAND", 2: "STABILIZE"}
                     s.mode = modes.get(msg.custom_mode, f"MODE_{msg.custom_mode}")
             elif t == "GLOBAL_POSITION_INT":
-                s.lat, s.lon = msg.lat / 1e7, msg.lon / 1e7
-                s.alt_m, s.relative_alt_m = msg.alt / 1000.0, msg.relative_alt / 1000.0
+                s.lat = _finite(msg.lat / 1e7, None)
+                s.lon = _finite(msg.lon / 1e7, None)
+                s.alt_m = _finite(msg.alt / 1000.0)
+                s.relative_alt_m = _finite(msg.relative_alt / 1000.0)
                 s.heading_deg = msg.hdg / 100.0 if msg.hdg != 65535 else s.heading_deg
             elif t == "VFR_HUD":
-                s.ground_speed_mps = msg.groundspeed
-                s.alt_baro_m = msg.alt
+                s.ground_speed_mps = _finite(msg.groundspeed)
+                s.alt_baro_m = _finite(msg.alt)
             elif t == "SYS_STATUS":
-                s.battery_voltage_v = msg.voltage_battery / 1000.0
-                s.battery_current_a = msg.current_battery / 100.0
+                s.battery_voltage_v = _finite(msg.voltage_battery / 1000.0)
+                s.battery_current_a = _finite(msg.current_battery / 100.0)
                 s.battery_remaining_pct = msg.battery_remaining
                 # sensors enabled but not healthy -> why prearm/arming fails
                 try:
@@ -160,18 +183,23 @@ class TelemetryStore:
                     s.rc_rssi = rssi
             elif t == "GPS_RAW_INT":
                 s.gps_fix, s.satellites = msg.fix_type, msg.satellites_visible
-                s.hdop = msg.eph / 100.0 if msg.eph != 65535 else 99.9
+                s.hdop = _finite(msg.eph / 100.0, 99.9) if msg.eph != 65535 else 99.9
             elif t == "ATTITUDE":
-                s.roll_deg, s.pitch_deg = degrees(msg.roll), degrees(msg.pitch)
-                s.yaw_deg = degrees(msg.yaw)
+                s.roll_deg = _finite(degrees(msg.roll))
+                s.pitch_deg = _finite(degrees(msg.pitch))
+                s.yaw_deg = _finite(degrees(msg.yaw))
             elif t == "HIGHRES_IMU":
-                s.accel_x, s.accel_y, s.accel_z = msg.xacc, msg.yacc, msg.zacc
+                s.accel_x = _finite(msg.xacc)
+                s.accel_y = _finite(msg.yacc)
+                s.accel_z = _finite(msg.zacc)
             elif t == "ESTIMATOR_STATUS":
                 s.ekf_flags = int(getattr(msg, "flags", 0) or 0)
-                s.ekf_vel_ratio = float(getattr(msg, "vel_ratio", 0.0) or 0.0)
-                s.ekf_hpos_ratio = float(getattr(msg, "hpos_ratio", 0.0) or 0.0)
+                s.ekf_vel_ratio = _finite(getattr(msg, "vel_ratio", 0.0) or 0.0)
+                s.ekf_hpos_ratio = _finite(getattr(msg, "hpos_ratio", 0.0) or 0.0)
             elif t in ("SCALED_IMU", "SCALED_IMU2", "RAW_IMU"):
                 g = 9.80665 / 1000.0  # milli-g -> m/s^2
-                s.accel_x, s.accel_y, s.accel_z = msg.xacc * g, msg.yacc * g, msg.zacc * g
+                s.accel_x = _finite(msg.xacc * g)
+                s.accel_y = _finite(msg.yacc * g)
+                s.accel_z = _finite(msg.zacc * g)
         finally:
             s.updated_at = time.time()
