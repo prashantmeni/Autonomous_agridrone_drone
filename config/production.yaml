@@ -5,7 +5,9 @@ mavlink:
 telemetry:
   rate_hz: 5
 camera:
-  enabled: true
+  # Set false while no camera module is fitted: preflight then reports
+  # SKIPPED instead of warning about hardware that is intentionally absent.
+  enabled: false
   # CSI camera module (Raspberry Pi OV5647) via libcamera/picamera2. `auto`
   # would try raw V4L2 Bayer reads, which stall on unicam nodes.
   type: picamera2
