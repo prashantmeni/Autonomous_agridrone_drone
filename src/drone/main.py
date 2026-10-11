@@ -44,7 +44,15 @@ def main():
         if a.no_api: 
             while True: await asyncio.sleep(3600)
         srv = uvicorn.Server(uvicorn.Config(api, host=cfg.api.host, port=cfg.api.port, log_level="info"))
-        await srv.serve()
+        try:
+            await srv.serve()
+        finally:
+            # Always stop the capture thread, including one parked waiting for
+            # a camera to be connected, so shutdown cannot hang.
+            try:
+                await dapp.stop()
+            except Exception as e:  # noqa: BLE001
+                log.warning("shutdown cleanup: %s", e)
     asyncio.run(runner())
 
 if __name__ == "__main__":

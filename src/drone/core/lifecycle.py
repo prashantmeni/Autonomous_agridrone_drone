@@ -84,3 +84,12 @@ class DroneApp:
 
     async def stop(self):
         for t in self._tasks: t.cancel()
+        # The camera capture thread can now be parked waiting for a module to
+        # be connected, so it needs an explicit stop on shutdown - otherwise
+        # it would keep probing the bus after the app is asked to exit.
+        try:
+            from ..runtime import get_services
+            svc = get_services(self)
+            svc.camera.stop()
+        except Exception as e:  # noqa: BLE001
+            log.debug("camera stop skipped: %s", e)

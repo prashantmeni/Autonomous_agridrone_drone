@@ -290,8 +290,18 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
       {!live && cam !== null && (
         <div className="video-slate">
           <VideoOff size={30} />
-          <b>{cam?.status === "NOT_STARTED" ? "Camera idle" : "No camera signal"}</b>
-          <span>Connect a USB/Pi camera to enable live video and recording</span>
+          <b>
+            {cam?.status === "NOT_STARTED"
+              ? "Camera idle"
+              : cam?.retrying
+                ? "Waiting for camera…"
+                : "No camera signal"}
+          </b>
+          <span>
+            {cam?.retrying
+              ? "Scanning for a module — the feed starts automatically once one is connected"
+              : "Connect a USB/Pi camera to enable live video and recording"}
+          </span>
         </div>
       )}
     </div>

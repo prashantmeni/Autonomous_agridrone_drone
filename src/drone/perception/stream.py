@@ -87,13 +87,24 @@ class _Picamera2Capture:
         except Exception as e:
             log.warning("picamera2 backend unavailable: %s", e)
             return False
-        cam = Picamera2()
-        w, h = self._size
-        cam.configure(cam.create_video_configuration(
-            main={"size": (w, h), "format": "BGR888"},
-            controls={"FrameRate": float(self._fps)},
-        ))
-        cam.start()
+        try:
+            cam = Picamera2()
+            w, h = self._size
+            cam.configure(cam.create_video_configuration(
+                main={"size": (w, h), "format": "BGR888"},
+                controls={"FrameRate": float(self._fps)},
+            ))
+            cam.start()
+        except Exception as e:
+            # No camera fitted: libcamera raises on Picamera2()/configure().
+            # This is expected and must not escape as a hard failure - the
+            # caller retries until a module is actually connected.
+            log.debug("picamera2 open failed (no camera?): %s", e)
+            try:
+                cam.close()
+            except Exception:
+                pass
+            return False
         self._cam = cam
         return True
 
@@ -145,6 +156,8 @@ class CameraService:
         self._recording_path: str | None = None
         self._recording_started = 0.0
         self._frames_written = 0
+        self._retrying = False
+        self._reconnects = 0
 
     # ------------------------------------------------------------------ start
     def start(self) -> str:
@@ -256,6 +269,60 @@ class CameraService:
             return fallback_w, fallback_h
         return (w, h) if w > 0 and h > 0 else (fallback_w, fallback_h)
 
+    # Re-probe a missing/removed camera instead of giving up. A CSI module on
+    # the Pi's unicam is probed once at boot, so a module fitted (or reseated)
+    # later only shows up after the device node is re-created. Rather than
+    # requiring a reboot we keep polling with a bounded backoff.
+    _RECONNECT_MIN_S = 1.0
+    _RECONNECT_MAX_S = 15.0
+    # Consecutive failed reads before we treat the device as gone and reopen.
+    _READ_FAIL_LIMIT = 5
+
+    def _wait_for_camera(self) -> bool:
+        """Poll for a camera until one opens. False means stop() was called."""
+        delay = self._RECONNECT_MIN_S
+        announced = False
+        with self._lock:
+            self._retrying = True
+        try:
+            while True:
+                with self._lock:
+                    if not self._running:
+                        return False
+                try:
+                    import cv2
+                    cap = self._open_capture(cv2)
+                except Exception as e:
+                    log.debug("camera reconnect probe failed: %s", e)
+                    cap = None
+                if cap is not None:
+                    if announced:
+                        self._reconnects += 1
+                        log.info("camera reconnected")
+                    self._cap = cap
+                    with self._lock:
+                        self._status = "READY"
+                        self._frame = None
+                        self._jpeg = None
+                        self._frame_ts = 0.0
+                    return True
+                if not announced:
+                    announced = True
+                    log.warning(
+                        "no camera available; will keep probing every %.0fs "
+                        "until one is connected", self._RECONNECT_MAX_S,
+                    )
+                deadline = time.time() + delay
+                while time.time() < deadline:
+                    with self._lock:
+                        if not self._running:
+                            return False
+                    time.sleep(0.2)
+                delay = min(delay * 1.6, self._RECONNECT_MAX_S)
+        finally:
+            with self._lock:
+                self._retrying = False
+
     def _run(self) -> None:
         try:
             import cv2
@@ -266,19 +333,26 @@ class CameraService:
                 self._running = False
             return
 
+        cap = None
         try:
-            cap = self._open_capture(cv2)
+            try:
+                cap = self._open_capture(cv2)
+            except Exception as e:
+                log.debug("initial camera open failed: %s", e)
             if cap is None:
-                log.warning("no camera geometry produced frames (sensor may be absent)")
+                # No camera yet: stay alive and retry rather than exiting, so a
+                # module connected later is picked up without a reboot.
+                if not self._wait_for_camera():
+                    return
+                cap = self._cap
+            else:
+                self._cap = cap
                 with self._lock:
-                    self._status = "CAMERA_UNAVAILABLE"
-                    self._running = False
-                return
-            self._cap = cap
-            with self._lock:
-                self._status = "READY"
-            log.info("camera stream started at %sx%s", *self._size)
+                    self._status = "READY"
+                log.info("camera stream started at %sx%s", *self._size)
+
             interval = 1.0 / self._fps
+            read_fails = 0
             while True:
                 with self._lock:
                     if not self._running:
@@ -286,11 +360,28 @@ class CameraService:
                 t0 = time.time()
                 ok, frame = cap.read()
                 if not ok:
+                    read_fails += 1
                     with self._lock:
-                        if self._status == "READY":
-                            self._status = "CAMERA_UNAVAILABLE"
+                        if self._status == "READY" and read_fails == 1:
+                            log.warning("camera read failed; retrying")
+                        self._status = "CAMERA_UNAVAILABLE"
+                    if read_fails >= self._READ_FAIL_LIMIT:
+                        # Unplugged mid-run (or the node went away): drop the
+                        # handle and re-probe so a reconnected camera recovers.
+                        log.warning("camera lost; attempting to reopen")
+                        try:
+                            cap.release()
+                        except Exception:
+                            pass
+                        self._cap = None
+                        if not self._wait_for_camera():
+                            return
+                        cap = self._cap
+                        read_fails = 0
+                        continue
                     time.sleep(0.5)
                     continue
+                read_fails = 0
                 okk, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
                 if not okk:
                     continue
@@ -329,6 +420,8 @@ class CameraService:
             return {
                 "status": self._status,
                 "available": self._status == "READY",
+                "retrying": self._retrying,
+                "reconnects": self._reconnects,
                 "width": self._size[0],
                 "height": self._size[1],
                 "fps": self._fps,
@@ -409,6 +502,29 @@ class CameraService:
                 time.sleep(0.05)
 
     # --------------------------------------------------------------- recording
+    # ------------------------------------------------------------------ stop
+    def stop(self, timeout_s: float = 5.0) -> None:
+        """Stop the capture thread, including a thread parked in reconnect.
+
+        The reconnect loop polls until a camera appears, so shutdown has to be
+        able to interrupt that wait - otherwise the thread would keep probing
+        the bus after the service is asked to shut down.
+        """
+        with self._lock:
+            self._running = False
+            self._status = "NOT_STARTED" if self._status != "UNAVAILABLE" else self._status
+            self._retrying = False
+        th, self._thread = self._thread, None
+        if th is not None and th.is_alive():
+            th.join(timeout=max(0.1, timeout_s))
+        try:
+            if self._cap is not None:
+                self._cap.release()
+        except Exception:
+            pass
+        with self._lock:
+            self._cap = None
+
     def start_recording(self) -> dict:
         if self.status()["status"] == "NOT_STARTED":
             self.start()

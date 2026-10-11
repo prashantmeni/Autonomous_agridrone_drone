@@ -48,6 +48,9 @@ export interface HealthReport {
 export interface CameraStatus {
   status: string;
   available: boolean;
+  /** True while the capture thread is polling for a camera to appear. */
+  retrying?: boolean;
+  reconnects?: number;
   width: number;
   height: number;
   fps: number;
